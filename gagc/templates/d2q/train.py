@@ -27,8 +27,10 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
 
 
+from gagc.benchmarks.kuairec.artifacts import run_frozen, save_checkpoint
+
 TRAIN_DATA = os.environ.get("GR_TRAIN_DATA", "")
-TEST_DATA = os.environ.get("GR_TEST_DATA", "")
+VAL_DATA = os.environ.get("GR_VAL_DATA", "")
 SEED = int(os.environ.get("GR_SEED", "2024"))
 BATCH_SIZE = int(os.environ.get("GR_BATCH_SIZE", "512"))
 NUM_EPOCHS = int(os.environ.get("GR_NUM_EPOCHS", "2"))
@@ -273,11 +275,19 @@ def evaluate(model: nn.Module, loader: DataLoader, stats: D2QStats, device: torc
     )
 
 
+def evaluate_frozen(model, extra, data, device):
+    dataset = KuaiD2QDataset(data, extra['stats'], train=False)
+    loader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=0)
+    return evaluate(model, loader, extra['stats'], device)
+
+
 def main() -> None:
     print("D2Q KuaiRec cold-start")
+    if run_frozen(evaluate_frozen, __file__):
+        return
     set_seed(SEED)
     train = require_data(TRAIN_DATA, "GR_TRAIN_DATA")
-    test = require_data(TEST_DATA, "GR_TEST_DATA")
+    test = require_data(VAL_DATA, "GR_VAL_DATA")
     print(f"train shape: {train.shape}  test shape: {test.shape}")
     print("schema: col48=play_duration_sec col49=video_duration_sec col50=watch_ratio_raw")
 
@@ -292,7 +302,8 @@ def main() -> None:
     optimizer = torch.optim.Adagrad(model.parameters(), lr=LR)
     print(f"device: {device}  groups={NUM_GROUPS}  params={sum(p.numel() for p in model.parameters() if p.requires_grad):,}")
 
-    best = (0.0, float("inf"), 0.0, float("inf"))
+    checkpoint_extra = {"stats": stats}
+    best = (float("-inf"), float("inf"), 0.0, float("inf"))
     for epoch in range(1, NUM_EPOCHS + 1):
         model.train()
         total_loss = 0.0
@@ -310,8 +321,9 @@ def main() -> None:
             total_loss += float(loss.item()) * q.numel()
             total_count += q.numel()
         metrics = evaluate(model, test_loader, stats, device)
-        if metrics[1] < best[1] or metrics[0] > best[0]:
+        if (metrics[0], -metrics[1]) > (best[0], -best[1]):
             best = metrics
+            save_checkpoint(model, metrics, epoch, checkpoint_extra, __file__)
         print(
             f"Epoch {epoch}/{NUM_EPOCHS}: loss={total_loss / max(total_count, 1):.6f} "
             f"WT_XAUC={metrics[0]:.4f} WT_MAE={metrics[1]:.4f} "

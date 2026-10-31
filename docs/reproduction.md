@@ -104,7 +104,9 @@ in the review ZIP. Audit any additional experiment evidence before distributing 
 ## Compatibility entrypoints
 
 `bash run2.sh --help` and `bash gr.sh --help` describe the earlier Amazon and KuaiRec
-entrypoints. KuaiRec preprocessing uses `prepare_gr_data.py`. These scripts require
+entrypoints. KuaiRec preprocessing uses `prepare_gr_data.py` and writes independent train,
+validation and test arrays; see the [KuaiRec protocol](kuairec.md) for exact
+partitioning, regeneration of older arrays and the required `--val-data` argument. These scripts require
 the optional `legacy` dependencies and provider environment variables; their agent
 workflow differs from the current standalone runner. Do not report the two execution
 paths as an identical method configuration.

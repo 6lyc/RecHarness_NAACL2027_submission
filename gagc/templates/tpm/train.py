@@ -23,8 +23,10 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
 
 
+from gagc.benchmarks.kuairec.artifacts import run_frozen, save_checkpoint
+
 TRAIN_DATA = os.environ.get("GR_TRAIN_DATA", "")
-TEST_DATA = os.environ.get("GR_TEST_DATA", "")
+VAL_DATA = os.environ.get("GR_VAL_DATA", "")
 SEED = int(os.environ.get("GR_SEED", "2024"))
 BATCH_SIZE = int(os.environ.get("GR_BATCH_SIZE", "512"))
 NUM_EPOCHS = int(os.environ.get("GR_NUM_EPOCHS", "2"))
@@ -294,11 +296,20 @@ def evaluate(model: nn.Module, loader: DataLoader, centers: torch.Tensor, device
     )
 
 
+def evaluate_frozen(model, extra, data, device):
+    dataset = KuaiTPMDataset(data, extra['play_edges'], extra['duration_edges'],
+                             extra['dense_mean'], extra['dense_std'])
+    loader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=0)
+    return evaluate(model, loader, extra['centers'].to(device), device)
+
+
 def main() -> None:
     print("TPM KuaiRec cold-start")
+    if run_frozen(evaluate_frozen, __file__):
+        return
     set_seed(SEED)
     train = require_data(TRAIN_DATA, "GR_TRAIN_DATA")
-    test = require_data(TEST_DATA, "GR_TEST_DATA")
+    test = require_data(VAL_DATA, "GR_VAL_DATA")
     print(f"train shape: {train.shape}  test shape: {test.shape}")
     print("schema: col48=play_duration_sec col49=video_duration_sec col50=watch_ratio_raw")
 
@@ -331,7 +342,9 @@ def main() -> None:
         center_std = 1.0
     centers_norm = (centers - center_mean) / center_std  # for training
 
-    best = (0.0, float("inf"), 0.0, float("inf"))
+    checkpoint_extra = {"play_edges": play_edges, "duration_edges": duration_edges,
+                        "dense_mean": dense_mean, "dense_std": dense_std, "centers": centers.cpu()}
+    best = (float("-inf"), float("inf"), 0.0, float("inf"))
     centers_norm = centers_norm.to(device)
     for epoch in range(1, NUM_EPOCHS + 1):
         model.train()
@@ -367,8 +380,9 @@ def main() -> None:
             total_loss += float(loss.item()) * play.numel()
             total_count += play.numel()
         metrics = evaluate(model, test_loader, centers, device)
-        if metrics[1] < best[1] or metrics[0] > best[0]:
+        if (metrics[0], -metrics[1]) > (best[0], -best[1]):
             best = metrics
+            save_checkpoint(model, metrics, epoch, checkpoint_extra, __file__)
         print(
             f"Epoch {epoch}/{NUM_EPOCHS}: loss={total_loss / max(total_count, 1):.6f} "
             f"WT_XAUC={metrics[0]:.4f} WT_MAE={metrics[1]:.4f} "

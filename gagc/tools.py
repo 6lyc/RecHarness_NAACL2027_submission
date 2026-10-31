@@ -430,11 +430,15 @@ def _trial_runtime_env(slot_id: int) -> tuple[dict[str, str], list[int]]:
         env["CUDA_VISIBLE_DEVICES"] = str(cfg.gpu_id_for_slot(slot_id))
     env["GAGC_SLOT_ID"] = str(slot_id)
     if _BENCHMARK_MODE == "kuairec":
+        if not _GR_VAL_DATA or os.path.realpath(_GR_VAL_DATA) == os.path.realpath(_GR_TEST_DATA):
+            raise ValueError('KuaiRec search requires an independent validation file')
         if _GR_TRAIN_DATA:
             env["GR_TRAIN_DATA"] = _GR_TRAIN_DATA
-        eval_data = _GR_VAL_DATA or _GR_TEST_DATA
-        if eval_data:
-            env["GR_TEST_DATA"] = eval_data
+        env["GR_VAL_DATA"] = _GR_VAL_DATA
+        env["GR_TEST_DATA"] = _GR_VAL_DATA  # compatibility name; validation only
+        env["GR_RUN_MODE"] = "train"
+        env.pop('GR_EVAL_DATA', None)
+        env.pop('GR_CHECKPOINT_PATH', None)
         env.setdefault("GR_NUM_EPOCHS", "2")
     elif _BENCHMARK_MODE == "amazon_reviews":
         env.setdefault("SASREC_EPOCHS", "200")
@@ -1522,6 +1526,12 @@ def _build_hypothesis(arm: str, state: ThompsonState, diag_blob: str) -> str:
 # Tool 1: propose_action_group
 # ---------------------------------------------------------------------------
 
+def _require_open_kuairec_search():
+    if (_BENCHMARK_MODE == 'kuairec' and _LOGS_ROOT and
+            os.path.exists(os.path.join(_LOGS_ROOT, 'final_eval', 'attempt.json'))):
+        raise RuntimeError('KuaiRec search is closed after held-out evaluation starts')
+
+
 def propose_action_group(
     state_json: str,
     diagnostics_json: str = "{}",
@@ -1550,6 +1560,7 @@ def propose_action_group(
           code_hint, hypothesis, is_jumping (bool).
         delta sign: positive = increase / forward variant, negative = decrease / conservative.
     """
+    _require_open_kuairec_search()
     global _LAST_SELECTION_LOG, _LAST_PROPOSED_CANDIDATES
 
     # Read authoritative state
@@ -1887,7 +1898,7 @@ def _apply_edits(content: str, edits: list[dict]) -> tuple[str, str | None]:
     return content, None
 
 
-def execute_trial(
+def _execute_trial_impl(
     spec_json: str,
     script_path: str = "/workspace/best.py",
     timeout_multiplier: float = 1.5,
@@ -2098,6 +2109,34 @@ def execute_trial(
         convergence_trace=convergence_trace, error=error_message,
         stdout_tail=stdout_tail, stderr_tail=stderr_tail,
     )
+
+
+def execute_trial(spec_json: str, script_path: str = "/workspace/best.py",
+                  timeout_multiplier: float = 1.5, slot_id: int = 0) -> str:
+    """Execute one candidate and retain validation-selected KuaiRec weights.
+
+    Use execute_trial_group for mutations and execute_trial only for a no-op baseline.
+    """
+    _require_open_kuairec_search()
+    if _BENCHMARK_MODE == 'kuairec':
+        inherited = os.path.join(os.path.dirname(_resolve_script_path(script_path)), 'gr_checkpoint.pt')
+        if os.path.isfile(inherited):
+            os.remove(inherited)
+    result = json.loads(_execute_trial_impl(spec_json, script_path, timeout_multiplier, slot_id))
+    if _BENCHMARK_MODE == 'kuairec' and _is_valid_trial(result):
+        from gagc.benchmarks.kuairec.artifacts import retain_trial
+        started = time.time()
+        try:
+            path = _resolve_script_path(script_path)
+            archive = os.path.join(_LOGS_ROOT, 'kuairec_artifacts', str(time.time_ns()) + '_' + str(slot_id))
+            result['kuairec_artifact'] = retain_trial(path, archive)
+            if (result.get('spec') or {}).get('is_baseline'):
+                _write_json_log('kuairec_selection.json', result['kuairec_artifact'])
+        except (OSError, ValueError) as exc:
+            result['val_score'] = _CRASH_SCORE
+            result['error_message'] = 'KuaiRec checkpoint retention failed: ' + str(exc)
+        result['wall_time_secs'] += time.time() - started
+    return json.dumps(result, indent=2)
 
 
 def _run_kuairec_eval(
@@ -2318,7 +2357,8 @@ def _select_winner_by_benchmark(results: list[dict]) -> dict | None:
 
     def _key(r: dict):
         score = _benchmark_score(r)
-        mae = _metric_float((r.get("val_metrics") or {}).get("MAE"), float("inf"))
+        metrics = r.get("val_metrics") or {}
+        mae = _metric_float(metrics.get("MAE", metrics.get("WT-MAE")), float("inf"))
         return (score, -mae)
 
     return max(valid, key=_key)
@@ -2686,6 +2726,7 @@ def update_thompson_state(
     Returns:
         Updated ThompsonState JSON.
     """
+    _require_open_kuairec_search()
     # Read authoritative state
     if _STORE is not None:
         try:
@@ -3446,6 +3487,7 @@ def promote_winner(
     Also sets _LAST_PROMOTION_RESULT so update_thompson_state can gate
     score_history / winner lesson writes on actual promotion success.
     """
+    _require_open_kuairec_search()
     global _LAST_PROMOTION_RESULT
     script_path = _resolve_script_path(script_path)
     _LAST_PROMOTION_RESULT = {}
@@ -3545,6 +3587,20 @@ def promote_winner(
     elif not isinstance(new_predict, str):
         new_predict = current_predict
 
+    if _BENCHMARK_MODE == 'kuairec':
+        artifact = winner.get('kuairec_artifact')
+        try:
+            if not artifact:
+                raise ValueError('Winner has no retained validation checkpoint')
+            from gagc.benchmarks.kuairec.artifacts import verify_artifact
+            archive = verify_artifact(artifact, os.path.join(artifact['directory'], 'train.py'))
+            if hashlib.sha256(new_code.encode()).hexdigest() != artifact['files']['train.py']:
+                raise ValueError('Winner code does not match its trained checkpoint')
+        except (OSError, ValueError) as exc:
+            fail = {'promoted': False, 'error': 'KuaiRec checkpoint check failed: ' + str(exc)}
+            _LAST_PROMOTION_RESULT = fail
+            return json.dumps(fail)
+
     backup_code = current_code
     backup_predict = current_predict
     train_path = os.path.join(workspace_dir, "train.py")
@@ -3600,6 +3656,14 @@ def promote_winner(
             "train_code": backup_code if train_py_existed else "",
             "trial_group_id": winner.get("trial_group_id"),
         }
+    if _BENCHMARK_MODE == 'kuairec':
+        for name in artifact['files']:
+            if name.startswith('model/') and name.endswith('.py'):
+                destination = os.path.join(workspace_dir, name)
+                os.makedirs(os.path.dirname(destination), exist_ok=True)
+                shutil.copy2(archive / name, destination)
+        _write_json_log('kuairec_selection.json', artifact)
+        promotion_log['kuairec_artifact'] = artifact
     _LAST_PROMOTION_RESULT = promotion_log
     _write_json_log("promotion/latest.json", promotion_log)
     if winner.get("trial_group_id"):
@@ -3620,8 +3684,14 @@ def promote_winner(
 
 def _final_runtime_env(slot_id: int = 0) -> dict[str, str]:
     env, _ = _trial_runtime_env(slot_id)
-    if _BENCHMARK_MODE == "kuairec" and _GR_TEST_DATA:
-        env["GR_TEST_DATA"] = _GR_TEST_DATA
+    if _BENCHMARK_MODE == "kuairec":
+        if not _GR_TEST_DATA:
+            raise ValueError('Independent KuaiRec held-out test data is required')
+        env['GR_RUN_MODE'] = 'evaluate'
+        env['GR_EVAL_DATA'] = _GR_TEST_DATA
+        env['GR_TEST_DATA'] = _GR_TEST_DATA
+        env.pop('GR_TRAIN_DATA', None)
+        env.pop('GR_VAL_DATA', None)
     return env
 
 
@@ -3780,7 +3850,9 @@ def evaluate_final_incumbent(
     slot_id: int = 0,
     timeout_secs: float | None = None,
 ) -> str:
-    """Train/evaluate the frozen incumbent once on the held-out test split.
+    """Evaluate the frozen incumbent once on the held-out test split.
+
+    KuaiRec loads retained validation-selected weights and never retrains here.
 
     This tool is for final reporting only. It does not update Thompson state,
     does not promote code, and must not be fed back into future search rounds.
@@ -3798,13 +3870,30 @@ def evaluate_final_incumbent(
         _write_json_log("final_eval/latest.json", result)
         return json.dumps(result, indent=2)
 
+    evaluation_script = script_path
+    if _BENCHMARK_MODE == 'kuairec':
+        from gagc.benchmarks.kuairec.artifacts import verify_artifact
+        selection = os.path.join(_LOGS_ROOT, 'kuairec_selection.json')
+        try:
+            with open(selection) as handle:
+                artifact = json.load(handle)
+            directory = verify_artifact(artifact, script_path)
+            attempt = os.path.join(_LOGS_ROOT, 'final_eval', 'attempt.json')
+            os.makedirs(os.path.dirname(attempt), exist_ok=True)
+            with open(attempt, 'x') as handle:
+                json.dump({'source': artifact['files']['train.py'], 'started_at': _utc_now_iso()}, handle)
+            evaluation_script = str(directory / 'train.py')
+        except (OSError, ValueError) as exc:
+            return json.dumps({'ok': False, 'error': 'KuaiRec final evaluation refused: ' + str(exc)})
     env = _final_runtime_env(slot_id)
+    if _BENCHMARK_MODE == 'kuairec':
+        env['GR_CHECKPOINT_PATH'] = str(directory / 'gr_checkpoint.pt')
     timeout = float(timeout_secs) if timeout_secs is not None else _configured_trial_floor_secs() * 2.0
     proc = None
     error: str | None = None
     try:
         proc = subprocess.run(
-            [sys.executable, script_path],
+            [sys.executable, evaluation_script],
             capture_output=True,
             timeout=timeout,
             env=env,

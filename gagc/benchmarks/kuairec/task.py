@@ -35,6 +35,7 @@ class TaskSpec:
 
     # Data layout expected by the harness
     train_data_key: str = "train_data"    # env var / path to train .npy file
+    val_data_key: str = "val_data"        # independent search feedback
     test_data_key: str = "test_data"      # env var / path to test .npy file
 
     # Model output contract

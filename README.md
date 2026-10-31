@@ -40,7 +40,8 @@ python -m recharness --help
 python -m pytest -q
 ```
 
-No real GPU training or LLM calls are made by the test suite. Packaging validation
+The tests require no GPU training or LLM calls. When PyTorch is installed, three
+small CPU tests also exercise KuaiRec training and frozen inference. Packaging validation
 and the inherited compatibility checks are documented in [validation](docs/validation.md).
 
 ## Main experiment
@@ -100,7 +101,8 @@ starting. Preflight is a separate validation step and does not certify a later r
 install `pip install -e '.[legacy,templates]'` to use those scripts. The standalone
 `python -m recharness` entrypoint is the reproduction path for the latest method.
 The earlier scripts do not provide the standalone runner's evidence archive and
-single-model checks.
+single-model checks. KuaiRec uses the [three-way data and frozen-test protocol](docs/kuairec.md);
+`gr.sh` requires explicit `--val-data` and `--test-data` files.
 
 ## Review artifact
 

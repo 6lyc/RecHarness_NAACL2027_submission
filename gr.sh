@@ -7,7 +7,8 @@
 #
 # Options:
 #   --train-data  Path to the training array (.npy), required
-#   --test-data   Path to the evaluation array (.npy), required
+#   --val-data    Path to the validation array (.npy), required
+#   --test-data   Path to the held-out test array (.npy), required
 #   --gpus        Comma-separated GPU IDs, required when GPUs are available
 #   --budget      Total compute-time budget in seconds (default: 43200)
 #   --trial-secs  Estimated cost per trial in seconds (default: 6400)
@@ -20,6 +21,7 @@
 # Example:
 #   bash gr.sh \
 #       --train-data ./input/train_data.npy \
+#       --val-data   ./input/val_data.npy   \
 #       --test-data  ./input/test_data.npy  \
 #       --gpus 0,1,2,3 \
 #       --budget 43200
@@ -43,6 +45,7 @@ export LANGCHAIN_TRACING_V2="${LANGCHAIN_TRACING_V2:-true}"
 
 # Default parameters.
 TRAIN_DATA=""
+VAL_DATA=""
 TEST_DATA=""
 GPU_IDS_ARG=""
 BUDGET=43200
@@ -56,6 +59,7 @@ RUN_ID=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --train-data) TRAIN_DATA="$2";  shift 2 ;;
+        --val-data)   VAL_DATA="$2";    shift 2 ;;
         --test-data)  TEST_DATA="$2";   shift 2 ;;
         --gpus)       GPU_IDS_ARG="$2"; shift 2 ;;
         --budget)     BUDGET="$2";      shift 2 ;;
@@ -98,13 +102,15 @@ log_info "Project root: ${PROJ_ROOT}"
 
 # Check required inputs.
 [[ -z "$TRAIN_DATA" ]] && die "--train-data is required, for example: --train-data ./input/train_data.npy"
+[[ -z "$VAL_DATA"   ]] && die "--val-data is required; validation never defaults to test"
 [[ -z "$TEST_DATA"  ]] && die "--test-data is required, for example: --test-data ./input/test_data.npy"
 
 # Convert inputs to absolute paths.
 TRAIN_DATA="$(cd "$(dirname "$TRAIN_DATA")" && pwd)/$(basename "$TRAIN_DATA")"
+VAL_DATA="$(cd "$(dirname "$VAL_DATA")" && pwd)/$(basename "$VAL_DATA")"
 TEST_DATA="$(cd "$(dirname "$TEST_DATA")" && pwd)/$(basename "$TEST_DATA")"
 
-if [[ ! -f "$TRAIN_DATA" ]] || [[ ! -f "$TEST_DATA" ]]; then
+if [[ ! -f "$TRAIN_DATA" ]] || [[ ! -f "$VAL_DATA" ]] || [[ ! -f "$TEST_DATA" ]]; then
     log_error "The data files do not exist. Prepare local KuaiRec data first:"
     log_error ""
     log_error "  python ${PROJ_ROOT}/prepare_gr_data.py --raw-dir /path/to/local/kuairec --output-dir $(dirname "${TRAIN_DATA}")"
@@ -140,7 +146,8 @@ fi
 
 log_info "Run ID      : ${RUN_ID}"
 log_info "Training data: ${TRAIN_DATA}"
-log_info "Test data    : ${TEST_DATA}"
+log_info "Validation   : ${VAL_DATA}"
+log_info "Held-out test: ${TEST_DATA}"
 log_info "GPU       : ${GPU_IDS_DISPLAY}  |  CPUs: ${CPUS}  |  Budget: ${BUDGET}s  |  TrialSecs: ${TRIAL_SECS}s"
 log_info "Cold start  : ${COLD_START}"
 log_info "LangSmith : ${LANGSMITH_PROJECT}"
@@ -178,6 +185,7 @@ agent = create_gr_agent(
     llm_provider       = "volcengine",
     model_id           = "glm-5.2",
     train_data         = "${TRAIN_DATA}",
+    val_data           = "${VAL_DATA}",
     test_data          = "${TEST_DATA}",
     cold_start         = "${COLD_START}",
     workspace_root     = "${WORKSPACE}",
@@ -195,8 +203,8 @@ result = agent.invoke(
         "while reducing watch-time MAE in seconds.\n"
         "Workspace: ${WORKSPACE}\n\n"
         "## Workflow\n"
-        "Step 1 is mandatory: run the unmodified cold-start template once with execute_trial, "
-        "record baseline WT xAUC and WT MAE, and monitor WR xAUC and WR MAE.\n"
+        "Step 1 is mandatory: propose and run the unmodified baseline with execute_trial_group, "
+        "promote its retained checkpoint, record validation WT xAUC and WT MAE, and monitor validation WR metrics.\n"
         "From Step 2 onward, use propose_action_group followed by execute_trial_group to explore "
         "four optimization hypotheses in parallel and improve WT xAUC.\n"
         "Execute all four hypotheses in each iteration to use all available GPUs."
@@ -204,6 +212,18 @@ result = agent.invoke(
     config={"configurable": {"thread_id": "${RUN_ID}-${COLD_START}"}},
 )
 
+# Ensure the fixed incumbent is tested once even when the agent omits its final call.
+from gagc.tools import evaluate_final_incumbent
+final_path = os.path.join("${LOGS_DIR}", "final_eval", "latest.json")
+if os.path.exists(final_path):
+    import json
+    with open(final_path) as handle:
+        held_out = json.load(handle)
+else:
+    import json
+    held_out = json.loads(evaluate_final_incumbent(os.path.join("${WORKSPACE}", "best.py")))
+if not held_out.get('ok'):
+    raise RuntimeError('Held-out evaluation did not complete: ' + str(held_out))
 os.makedirs("${RESULTS_DIR}", exist_ok=True)
 final_msg = (result.get("messages") or [None])[-1]
 content = final_msg.content if final_msg else str(result)
@@ -262,17 +282,23 @@ summary = {
     "best_iter":  best_iter,
     "num_iters":  len(iter_files),
     "train_data": "${TRAIN_DATA}",
+    "val_data":   "${VAL_DATA}",
     "test_data":  "${TEST_DATA}",
+    "selection_protocol": "validation_only_frozen_checkpoint_test_once",
     "cold_start": "${COLD_START}",
 }
 
+final_path = os.path.join(logs_dir, "final_eval", "latest.json")
+if os.path.exists(final_path):
+    with open(final_path) as handle:
+        summary['held_out_test'] = json.load(handle)
 summary_path = os.path.join(results_dir, "summary.json")
 with open(summary_path, "w") as f:
     json.dump(summary, f, indent=2, ensure_ascii=False)
 
 print(f"\n{'='*50}")
 if best_iter >= 0:
-    print(f"  Best result (iteration {best_iter})")
+    print(f"  Best validation result (iteration {best_iter})")
     print(f"  xAUC = {best_xauc:.4f}")
     print(f"  MAE  = {best_mae:.4f}")
 else:

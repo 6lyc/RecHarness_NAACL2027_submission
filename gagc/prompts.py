@@ -256,10 +256,9 @@ For KuaiRec templates, predict.py is only a compatibility module; the training s
 metrics directly to stdout and the harness parses those metrics.
 
 The script reads data from env vars (already injected by execute_trial):
-  GR_TRAIN_DATA, GR_TEST_DATA (during search this points to validation data; final evaluation points it to held-out test data)
+  GR_TRAIN_DATA and GR_VAL_DATA are the only search data. GR_TEST_DATA is a compatibility alias for validation during search. Never locate the held-out test file.
 RecHarness trial runs are short proxy evaluations: GR_NUM_EPOCHS defaults to 2.
-Do not increase GR_NUM_EPOCHS during search; final full training / held-out
-evaluation runs after search and does not consume RecHarness search budget.
+Do not increase GR_NUM_EPOCHS during search. Select an epoch using validation WT-XAUC (ties prefer lower MAE) and save it with save_checkpoint. Preserve evaluate_frozen and the run_frozen guard. Final held-out evaluation loads this exact checkpoint once; it never retrains or selects an epoch using test results. Build vocabulary, quantiles and normalization from training data only.
 At the end of training, the script MUST print exactly:
   XAUC=<WT_XAUC>
   MAE=<WT_MAE>
@@ -388,7 +387,7 @@ Each iteration:
 
 update_thompson_state auto-maintains the `experiment_skill` field in state.json with patch-level
 winner lessons and concrete failure avoids. Use this memory to write short hypotheses for selected arms; do not write code into tool-call arguments.
-Thompson reward and promotion are validation-only. The held-out KuaiRec test file is used only by `evaluate_final_incumbent` after search ends.
+Thompson reward and promotion are validation-only. After search ends, call `evaluate_final_incumbent` exactly once. It loads the retained validation-selected checkpoint; no further search or model changes are allowed after test feedback.
 
 ## Key constraints
 - When modifying GR_HIDDEN_DIM, also update GR_FEAT_DIM to match.

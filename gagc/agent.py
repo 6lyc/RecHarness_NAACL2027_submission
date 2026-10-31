@@ -506,8 +506,8 @@ def create_gr_agent(
         llm_provider: 'volcengine' (default) | 'anthropic'.
         model_id: Model name.
         train_data: Path to train .npy file.
-        val_data: Path to validation .npy file used during search. Defaults to
-            GAGC_GR_VAL_DATA, then test_data for backward compatibility.
+        val_data: Required independent validation .npy file used during search.
+            Can also be provided through GAGC_GR_VAL_DATA; never defaults to test.
         test_data: Path to held-out test .npy file used only by final evaluation.
         cold_start: KuaiRec template name: 'gr' | 'd2q' | 'ks_d2q' | 'tpm'.
         workspace_root: Root for training scripts.
@@ -532,6 +532,7 @@ def create_gr_agent(
         from gagc.agent import create_gr_agent
         agent = create_gr_agent(
             train_data="./input/train_data.npy",
+            val_data="./input/val_data.npy",
             test_data="./input/test_data.npy",
             workspace_root="./workspace_gr",
         )
@@ -542,9 +543,12 @@ def create_gr_agent(
     """
     # Switch benchmark mode to kuairec BEFORE init_workspace / pre-seed
     _tools_module._BENCHMARK_MODE = "kuairec"
-    _tools_module._GR_TRAIN_DATA = os.path.abspath(train_data)
-    _tools_module._GR_VAL_DATA = os.path.abspath(val_data or os.environ.get("GAGC_GR_VAL_DATA") or test_data)
-    _tools_module._GR_TEST_DATA = os.path.abspath(test_data)
+    from gagc.benchmarks.kuairec.artifacts import validate_splits
+    train_path, val_path, test_path = validate_splits(
+        train_data, val_data or os.environ.get("GAGC_GR_VAL_DATA"), test_data)
+    _tools_module._GR_TRAIN_DATA = train_path
+    _tools_module._GR_VAL_DATA = val_path
+    _tools_module._GR_TEST_DATA = test_path
     _tools_module._ROUTING_POLICY = "thompson" if use_thompson_sampling else "textual_gradient"
     os.environ["GAGC_COLD_START"] = cold_start
     if basin_transfer_rho is not None:
@@ -579,7 +583,7 @@ def create_gr_agent(
         f"\n## Data\n"
         f"- GR_TRAIN_DATA : {_tools_module._GR_TRAIN_DATA}\n"
         f"- GR_VAL_DATA   : {_tools_module._GR_VAL_DATA} (used during search)\n"
-        f"- GR_TEST_DATA  : {_tools_module._GR_TEST_DATA} (held out until evaluate_final_incumbent)\n"
+        f"- held-out test : managed by the host; unavailable during search\n"
         f"- cold_start    : {cold_start}\n"
         f"\n## Budget\n"
         f"- global_budget : {global_budget_secs}s\n"

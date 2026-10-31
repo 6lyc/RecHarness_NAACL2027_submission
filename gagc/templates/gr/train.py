@@ -7,7 +7,8 @@ Environment variables
 ---------------------
 Data paths (required):
     GR_TRAIN_DATA       path to train .npy file
-    GR_TEST_DATA        path to test .npy file
+    GR_VAL_DATA         path to validation .npy file
+    GR_RUN_MODE         train (default) or evaluate (frozen checkpoint only)
 
 Architecture:
     GR_FEAT_DIM         int   (default 128)  — embedding / feature dimension
@@ -69,6 +70,8 @@ from sklearn.preprocessing import LabelEncoder
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
+from gagc.benchmarks.kuairec.artifacts import run_frozen, save_checkpoint
+
 
 # ── make model subpackage importable when run as a script ─────────────────────
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -95,7 +98,7 @@ def _env_str(name: str, default: str) -> str:
 
 
 TRAIN_DATA  = _env_str("GR_TRAIN_DATA", "")
-TEST_DATA   = _env_str("GR_TEST_DATA", "")
+VAL_DATA    = _env_str("GR_VAL_DATA", "")
 TARGET_COL  = 48  # play_duration_sec — watch-time target in seconds
 VIDEO_DURATION_COL = 49  # video_duration_sec — duration feature + WR recovery
 WATCH_RATIO_COL = 50  # watch_ratio_raw — WR metric ground truth
@@ -475,9 +478,32 @@ def train_one_epoch(epoch, model, train_loader, optimizer, criterion, durations,
 # Main
 # ═════════════════════════════════════════════════════════════════════════════
 
+def encode_evaluation(data, extra):
+    encoded = np.searchsorted(extra['duration_values'], data[:, VIDEO_DURATION_COL])
+    values = extra['duration_values']
+    matched = (encoded < len(values)) & (values[np.minimum(encoded, len(values) - 1)] == data[:, VIDEO_DURATION_COL])
+    encoded = np.where(matched, encoded + 1, 0)
+    data = np.column_stack([data.copy(), encoded])
+    for column in range(24):
+        data[:, column] = np.where((data[:, column] >= 0) &
+            (data[:, column] <= extra['max_values'][column]), data[:, column], 0)
+    return data
+
+
+def evaluate_frozen(model, extra, data, device):
+    data = encode_evaluation(data, extra)
+    # Autoregressive evaluation never needs target-derived token sequences.
+    labels = [torch.tensor([1, 2], dtype=torch.long) for _ in range(len(data))]
+    loader = DataLoader(Dataset_Kuai(data, labels), batch_size=BATCH_SIZE,
+                        collate_fn=collate_fn, shuffle=False)
+    return evaluate(loader, model, WINDOW_SIZE, USE_MIXUP, extra['durations'].to(device), device)
+
+
 def main():
-    if not TRAIN_DATA or not TEST_DATA:
-        raise ValueError("GR_TRAIN_DATA and GR_TEST_DATA env vars must be set")
+    if run_frozen(evaluate_frozen, __file__):
+        return
+    if not TRAIN_DATA or not VAL_DATA:
+        raise ValueError("GR_TRAIN_DATA and GR_VAL_DATA env vars must be set")
 
     print(f"FEAT_DIM={FEAT_DIM} HIDDEN_DIM={HIDDEN_DIM} N_HEAD={N_HEAD} DEC_LAYERS={DEC_LAYERS}")
     print(f"DROPOUT={DROPOUT} FFN_DIM={FFN_DIM} BATCH_SIZE={BATCH_SIZE} NUM_EPOCHS={NUM_EPOCHS}")
@@ -490,44 +516,30 @@ def main():
     print(f"device: {device}")
 
     # ── Data ──────────────────────────────────────────────────────────────
-    train_feats = np.load(TRAIN_DATA)
-    test_feats  = np.load(TEST_DATA)
-    print(f"train shape: {train_feats.shape}  test shape: {test_feats.shape}")
-
-    target_train = train_feats[:, TARGET_COL]
-    target_test  = test_feats[:, TARGET_COL]
-    target_all   = np.concatenate([target_train, target_test])
-    target_int   = (target_all * 1000).astype(int)
-
-    # Encode video-duration column for item_duration_embedding.
-    dur_all   = np.concatenate([train_feats[:, VIDEO_DURATION_COL], test_feats[:, VIDEO_DURATION_COL]])
-    encoder   = LabelEncoder()
-    encoder.fit(np.sort(np.unique(dur_all)))
-    enc_dur   = encoder.transform(dur_all)
-    train_feats = np.column_stack([train_feats, enc_dur[:len(train_feats)]])
-    test_feats  = np.column_stack([test_feats,  enc_dur[len(train_feats):]])
-    print(f"after duration encoding — train: {train_feats.shape}  test: {test_feats.shape}")
-
-    feats_all           = np.concatenate([train_feats, test_feats])
-    max_values_per_col  = np.amax(feats_all, axis=0)
-
-    # ── Vocabulary ────────────────────────────────────────────────────────
-    special_tokens  = ['<pad>', '<sos>', '<eos>']
-    numeric_vocab   = get_genral_vocab_dynamic_q(
-        target_int, q_start=Q_START, q_end=Q_END, q_decay_rate=Q_DECAY, epsilon=EPSILON
-    )
+    train_feats = np.load(TRAIN_DATA, allow_pickle=False)
+    val_feats = np.load(VAL_DATA, allow_pickle=False)
+    target_int = (train_feats[:, TARGET_COL] * 1000).astype(int)
+    duration_values = np.sort(np.unique(train_feats[:, VIDEO_DURATION_COL]))
+    train_duration_ids = np.searchsorted(duration_values, train_feats[:, VIDEO_DURATION_COL]) + 1
+    train_feats = np.column_stack([train_feats, train_duration_ids])
+    max_values_per_col = np.amax(train_feats, axis=0)
+    checkpoint_extra = {'duration_values': duration_values, 'max_values': max_values_per_col}
+    val_feats = encode_evaluation(val_feats, checkpoint_extra)
+    special_tokens = ['<pad>', '<sos>', '<eos>']
+    numeric_vocab = get_genral_vocab_dynamic_q(
+        target_int, q_start=Q_START, q_end=Q_END, q_decay_rate=Q_DECAY, epsilon=EPSILON)
+    # The fixed unit token makes every nonnegative integer target representable
+    # without adapting the vocabulary to validation or held-out labels.
+    numeric_vocab = sorted({int(v) for v in numeric_vocab if int(v) > 0} | {1}, reverse=True)
     vocab = special_tokens + numeric_vocab
-    print(f"vocab size: {len(vocab)}")
-
-    durations, _, train_labels, test_labels = label_process(
-        vocab, numeric_vocab, len(train_feats), target_int, device
-    )
-
-    # ── DataLoaders ───────────────────────────────────────────────────────
-    train_ds     = Dataset_Kuai(train_feats, train_labels)
-    test_ds      = Dataset_Kuai(test_feats,  test_labels)
-    train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, collate_fn=collate_fn, shuffle=True)
-    test_loader  = DataLoader(test_ds,  batch_size=BATCH_SIZE, collate_fn=collate_fn, shuffle=False)
+    durations, _, train_labels, _ = label_process(
+        vocab, numeric_vocab, len(train_feats), target_int, device)
+    checkpoint_extra['durations'] = durations.cpu()
+    val_labels = [torch.tensor([1, 2], dtype=torch.long) for _ in range(len(val_feats))]
+    train_loader = DataLoader(Dataset_Kuai(train_feats, train_labels), batch_size=BATCH_SIZE,
+                              collate_fn=collate_fn, shuffle=True)
+    test_loader = DataLoader(Dataset_Kuai(val_feats, val_labels), batch_size=BATCH_SIZE,
+                             collate_fn=collate_fn, shuffle=False)
 
     # ── Model ─────────────────────────────────────────────────────────────
     enc = Encoder(input_dim=FEAT_DIM * 5, hidden_dim=HIDDEN_DIM, dropout_rate=DROPOUT)
@@ -543,7 +555,7 @@ def main():
     criterion = nn.CrossEntropyLoss(ignore_index=0, reduction='sum')
 
     best_mae   = float('inf')
-    best_xauc  = 0.0
+    best_xauc  = float('-inf')
     best_wr_mae = float('inf')
     best_wr_xauc = 0.0
     best_state = None
@@ -556,13 +568,12 @@ def main():
         xauc, mae, wr_xauc, wr_mae = evaluate(test_loader, model, WINDOW_SIZE, USE_MIXUP, durations, device)
         print(f"Epoch {epoch}/{NUM_EPOCHS}: WT_XAUC={xauc:.4f}  WT_MAE={mae:.4f}  WR_XAUC={wr_xauc:.4f}  WR_MAE={wr_mae:.4f}")
 
-        if mae < best_mae:
+        if (xauc, -mae) > (best_xauc, -best_mae):
             best_mae   = mae
             best_xauc  = xauc
             best_wr_mae = wr_mae
             best_wr_xauc = wr_xauc
-            best_state = copy.deepcopy(model.state_dict())
-            torch.save(best_state, SAVE_PATH)
+            save_checkpoint(model, (xauc, mae, wr_xauc, wr_mae), epoch, checkpoint_extra, __file__)
 
         elapsed = time.time() - start_time
         eh, em, es = seconds_to_hms(elapsed)

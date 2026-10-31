@@ -9,7 +9,7 @@ Usage (agent code)
     result = evaluate(
         train_script = './working/best.py',
         train_data   = './input/train_data.npy',
-        test_data    = './input/test_data.npy',
+        val_data    = './input/val_data.npy',
     )
     print(f"xAUC: {result.primary_metric:.4f}  MAE: {result.mae:.4f}")
 """
@@ -57,7 +57,7 @@ class BenchmarkResult:
 def evaluate(
     train_script: str,
     train_data: str,
-    test_data: str,
+    val_data: str,
     verbose: bool = True,
 ) -> BenchmarkResult:
     """Evaluate a GR model by running train_script and reading the reported metrics.
@@ -73,8 +73,8 @@ def evaluate(
         Path to best.py (the GR training script evolved by RecHarness).
     train_data:
         Path to train .npy file (KuaiRec features).
-    test_data:
-        Path to test .npy file (KuaiRec features).
+    val_data:
+        Path to independent validation .npy file. This entrypoint never uses test.
     verbose:
         Print progress.
 
@@ -87,7 +87,10 @@ def evaluate(
 
     env = os.environ.copy()
     env["GR_TRAIN_DATA"] = os.path.abspath(train_data)
-    env["GR_TEST_DATA"] = os.path.abspath(test_data)
+    env["GR_VAL_DATA"] = os.path.abspath(val_data)
+    env["GR_TEST_DATA"] = os.path.abspath(val_data)
+    env["GR_RUN_MODE"] = "train"
+    env.pop("GR_EVAL_DATA", None)
 
     result = subprocess.run(
         [sys.executable, train_script],
@@ -98,6 +101,8 @@ def evaluate(
     stdout = result.stdout.decode(errors="replace")
     stderr = result.stderr.decode(errors="replace")
 
+    if result.returncode:
+        raise RuntimeError("KuaiRec validation failed: " + stderr[-2000:])
     metrics = _parse_metrics(stdout)
 
     if verbose and metrics:
