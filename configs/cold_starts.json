@@ -1,0 +1,27 @@
+{
+  "gru4rec": {
+    "path": "gagc/templates/gru4rec_perdataset/train.py",
+    "sha256": "b7361f620a4a8be0c520992ec8ba68f47b7b5f0e6c8cfdd5c16e129ca41eae20",
+    "weights": "fresh initialization"
+  },
+  "nextitnet": {
+    "path": "gagc/templates/nextitnet_perdataset/train.py",
+    "sha256": "99d5aac6ece4bb49b744dcf9819f028c4c5ef79ca14cd307cbe296cfe68d2109",
+    "weights": "fresh initialization"
+  },
+  "bert4rec": {
+    "path": "gagc/templates/bert4rec_perdataset/train.py",
+    "sha256": "d51d266361556daac7a1c7e3dfbbc1aa6e46bcb7117f6cdbc71954385530c4ca",
+    "weights": "fresh initialization"
+  },
+  "hstu": {
+    "path": "gagc/templates/hstu_perdataset/train.py",
+    "sha256": "5f2c3a10c4f6a139a55e4108660ad314b1583fc8d45f9a1ca5c9e716b150e83d",
+    "weights": "fresh initialization"
+  },
+  "sasrec": {
+    "path": "gagc/templates/perdataset/train.py",
+    "sha256": "2b5ea48177d25e2c3cb8f3a9907ae5871174f75e7547f7f068df6cc8a17605ff",
+    "weights": "fresh initialization"
+  }
+}

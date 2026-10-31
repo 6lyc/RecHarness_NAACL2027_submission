@@ -1,0 +1,33 @@
+{
+  "version": "jump-v4-multicombination",
+  "scope": "Amazon Reviews matched experiments; model family remains constrained by original prompts",
+  "global_budget_change": "none; reservation and all failed attempts are charged within the existing cap",
+  "enabled_by_default": true,
+  "local_promotion": "compare against current basin incumbent; preserve monotone global validation history",
+  "stagnant_rounds": 2,
+  "theta": 0.03,
+  "reserved_fraction": 0.35,
+  "reserved_exploration_trigger": true,
+  "maximum_jump_attempts": 1,
+  "trial_cap": "ceil(max(min_trial_seconds + 5, p75(last 32 positive measured trial costs) * 1.25 + 5))",
+  "retune_rounds": 4,
+  "retune_group_size": "largest integer 1..4 fitting the chosen jump batch plus four retune groups",
+  "acceptance": "retune best validation score strictly exceeds pre-jump global incumbent",
+  "incomplete_window": "restore old incumbent unless already exceeded; no delayed alpha/beta credit",
+  "rollback_failure": "stop before held-out evaluation",
+  "comparison": "same data, evaluator, LLM and total GPU budget for jump on/off; exploration trigger is logged explicitly",
+  "regular_arm_count": 6,
+  "jump_type": "batch of up to four distinct combinations; each modifies 2-4 registered directions spanning at least two parent categories",
+  "normal_reward": "strict validation improvement over the group-start basin incumbent",
+  "category_credit": "pair reward only; no component credit",
+  "jump_outcome_counter_count": 1,
+  "trial_batch": "maximize up to four candidates, then retune width within the same protected envelope; only best valid jump enters one basin",
+  "hyperparameter_arm": "hyperparameter_tuning: joint settings of existing program, no new mechanism",
+  "maximum_jump_candidates": 4,
+  "jump_direction_counts": [
+    2,
+    3,
+    4
+  ],
+  "memory": "per-candidate concrete proposal, source provenance, input-relative validation delta, execution cost and status; bounded relevant retrieval for hypothesis and implementation"
+}
