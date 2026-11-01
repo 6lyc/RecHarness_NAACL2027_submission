@@ -350,8 +350,8 @@ def _build_prompt(
     required_metrics = "XAUC= and MAE=" if benchmark_mode == "kuairec" else "a zero training exit code"
     feedback_block = feedback or "No previous failure; this is the first attempt."
     return f"""
-You are implementing one isolated RecHarness trial inside this trial workspace:
-{trial_dir}
+You are implementing one isolated RecHarness trial in the current working directory.
+Use relative paths inside this workspace.
 
 Attempt {attempt_idx}/{max_attempts}.
 Benchmark mode: {benchmark_mode}
@@ -395,29 +395,14 @@ Finish with a concise JSON summary of files changed and final metrics/errors. Do
 
 
 def _default_train_command(env: dict[str, str]) -> str:
-    assignments: list[str] = []
-    for key in (
-        "CUDA_VISIBLE_DEVICES",
-        "GAGC_SLOT_ID",
-        "GAGC_DATA_DIR",
-        "GAGC_TEST_DIR",
-        "SASREC_EPOCHS",
-        "GRU4REC_EPOCHS",
-        "BERT4REC_EPOCHS",
-        "NEXTITNET_EPOCHS",
-        "HSTU_EPOCHS",
-        "GR_TRAIN_DATA",
-        "GR_TEST_DATA",
-        "GR_NUM_EPOCHS",
-    ):
-        value = env.get(key)
-        if value:
-            assignments.append(f"{key}={shlex.quote(str(value))}")
-    if (env.get("GR_TRAIN_DATA") or env.get("GR_TEST_DATA")) and "GR_NUM_EPOCHS" not in env:
-        assignments.append("GR_NUM_EPOCHS=2")
-    python_bin = shlex.quote(sys.executable)
-    prefix = " ".join(assignments)
-    return f"{prefix} {python_bin} train.py".strip()
+    from gagc.privacy import worker_environment
+    safe = worker_environment(env)
+    # The coding transport needs its authentication; the training child does not.
+    unset = [part for name in sorted(set(env) - set(safe)) for part in ['-u', shlex.quote(name)]]
+    flags = [f'{name}=false' for name in ['LANGCHAIN_TRACING', 'LANGCHAIN_TRACING_V2', 'LANGSMITH_TRACING', 'RECHARNESS_ENABLE_TRACING']]
+    if (env.get('GR_TRAIN_DATA') or env.get('GR_TEST_DATA')) and 'GR_NUM_EPOCHS' not in env:
+        flags.append('GR_NUM_EPOCHS=2')
+    return ' '.join(['env', *unset, *flags, shlex.quote(sys.executable), 'train.py'])
 
 
 def _read_training_artifacts(artifact_dir: str) -> tuple[str, str, int | None]:

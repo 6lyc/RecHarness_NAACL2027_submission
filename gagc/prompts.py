@@ -29,7 +29,7 @@ The held-out test split is not evaluated or returned during search.
 ## File access rules
 
 - `read_file` / `write_file` / `ls` → use VIRTUAL paths: `/workspace/`, `/thompson_state/`, `/logs/`
-- `execute_trial` / `execute_trial_group` / `promote_winner` / `evaluate_final_incumbent` script_path → use the REAL absolute path from Runtime context
+- `execute_trial` / `execute_trial_group` / `promote_winner` / `evaluate_final_incumbent` script_path → use /workspace/best.py; the host resolves this virtual path
 - NEVER pass a real absolute path to read_file/write_file
 
 ## Optimizer state (/thompson_state/state.json)
@@ -118,7 +118,7 @@ Each iteration:
    from the immediately preceding `propose_action_group` call:
    - `specs_json`       : exactly `"__LAST_PROPOSED__"`
    - `hypotheses_json`  : a compact JSON object mapping arm or dimension to your short hypothesis
-   - `script_path`      : real absolute path from Runtime context
+   - `script_path`      : /workspace/best.py (resolved by the host)
 
    Example:
    `execute_trial_group(specs_json="__LAST_PROPOSED__", hypotheses_json="{\"tune_dropout_wd\":\"Validation peaks early then declines; increase regularization to improve cross-dataset generalization.\"}", script_path="...")`.
@@ -268,7 +268,7 @@ At the end of training, the script MUST print exactly:
 ## File access rules
 
 - `read_file` / `write_file` / `ls` → use VIRTUAL paths: `/workspace/`, `/thompson_state/`, `/logs/`
-- `execute_trial` script_path → use the REAL absolute path from Runtime context
+- `execute_trial` script_path → use /workspace/best.py; the host resolves this virtual path
 - NEVER pass a real absolute path to read_file/write_file
 
 ## Optimizer state (/thompson_state/state.json)
@@ -356,7 +356,7 @@ Each iteration:
    from the immediately preceding `propose_action_group` call:
    - `specs_json`       : exactly `"__LAST_PROPOSED__"`
    - `hypotheses_json`  : compact JSON object mapping arm/dimension to short hypothesis
-   - `script_path`      : real absolute path from Runtime context
+   - `script_path`      : /workspace/best.py (resolved by the host)
 
    Example:
    `execute_trial_group(specs_json="__LAST_PROPOSED__", hypotheses_json="{\"tune_dropout\":\"Validation xAUC is flat; increase dropout slightly to reduce overfit.\"}", script_path="...")`.
@@ -367,7 +367,7 @@ Each iteration:
    If the result contains `tool_error: true`, fix specs_json and rerun; do not promote/update.
    Never call execute_trial for mutations; it is only for the no-op baseline.
 
-5. **Promote winner** -- call `promote_winner(script_path=<real train.py path>)` using the same real absolute `script_path`.
+5. **Promote winner** -- call `promote_winner(script_path="/workspace/best.py")` using the same virtual `script_path`.
    Do not pass the full TrialResult array: the tool reads the latest raw group from cache / logs.
    It promotes the highest valid val_score (WT-XAUC), ties prefer lower validation MAE. Non-jumping
    candidates must exceed the incumbent best; valid jumping candidates may be promoted
@@ -414,7 +414,7 @@ Steps:
    so the predict() function stays consistent with the new model class.
 3. Call execute_trial with:
    - spec_json  : the MutationSpec JSON
-   - script_path: real absolute path to best.py (from the task message)
+   - script_path: /workspace/best.py (resolved by the host)
    - slot_id    : the slot_id you were given
    execute_trial sets CUDA_VISIBLE_DEVICES and CPU affinity automatically.
    During search it calls evaluate_val_fast() only and returns val_score/val_metrics.

@@ -9,6 +9,7 @@ import signal
 import subprocess
 import time
 from .core import TASK, TEXT, read, save, schema, strict_schema
+from gagc.privacy import llm_environment
 class TransportUnavailable(RuntimeError):
     """Retry the pending native step after cooldown; preserve successful work."""
 
@@ -55,7 +56,7 @@ class LLMTransport:
         save(directory / 'started.json', {'command': command, 'time': time.time()})
         with (directory / 'events.jsonl').open('w') as out, (directory / 'stderr.log').open('w') as err:
             process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=out, stderr=err,
-                text=True, env={**os.environ, 'CUDA_VISIBLE_DEVICES': ''}, start_new_session=True)
+                text=True, env=llm_environment({**os.environ, 'CUDA_VISIBLE_DEVICES': ''}), start_new_session=True)
             save(directory / 'pid.json', {'pid': process.pid, 'process_group': process.pid})
             try:
                 process.communicate(input=prompt, timeout=self.c['llm_timeout'])

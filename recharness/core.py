@@ -273,11 +273,8 @@ class Controller:
         env['RECHARNESS_CPU_CORES'] = ','.join(map(str, cores))
         env.pop('GAGC_TEST_DIR', None)
         env.pop('AMAZON_REVIEWS_INTERFACE_DIR', None)
-        # LLM credentials are unnecessary in training workers.
-        for key in list(env):
-            if key.endswith('API_KEY') or key.endswith('ACCESS_TOKEN'):
-                env.pop(key)
-        return env
+        from gagc.privacy import worker_environment
+        return worker_environment(env)
 
     def wave(self, proposals):
         remaining = self.ledger.available()

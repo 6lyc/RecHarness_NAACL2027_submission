@@ -8,9 +8,10 @@
 # Each iteration proposes four hypotheses and executes them in parallel.
 #
 # VOLCENGINE_API_KEY must be provided through the environment.
-# LangSmith tracing is optional and disabled when LANGSMITH_API_KEY is empty.
+# Optional tracing requires RECHARNESS_ENABLE_TRACING=true.
 # =============================================================================
 set -euo pipefail
+umask 077
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
 CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
@@ -21,15 +22,15 @@ log_error() { echo -e "${RED}[ERROR]${NC} $*"; }
 log_head()  { echo -e "\n${BOLD}${GREEN}$*${NC}"; }
 die()       { log_error "$*"; exit 1; }
 
-# ---- LangSmith tracing (optional; skipped if LANGSMITH_API_KEY is empty) ----
+# ---- Optional tracing configuration ----
+# Additional external tracing requires explicit opt-in for this run.
 export LANGSMITH_ENDPOINT="${LANGSMITH_ENDPOINT:-https://api.smith.langchain.com}"
 export LANGSMITH_API_KEY="${LANGSMITH_API_KEY:-}"
 LANGSMITH_PROJECT_PREFIX="${LANGSMITH_PROJECT_PREFIX:-${LANGSMITH_PROJECT:-recharness}}"
-if [[ -n "${LANGSMITH_API_KEY}" ]]; then
-    export LANGCHAIN_TRACING_V2="${LANGCHAIN_TRACING_V2:-true}"
-else
-    export LANGCHAIN_TRACING_V2="false"
-fi
+case "${RECHARNESS_ENABLE_TRACING:-false}" in
+    1|true|yes|on) export LANGCHAIN_TRACING_V2=true LANGSMITH_TRACING=true LANGCHAIN_TRACING=true ;;
+    *) export LANGCHAIN_TRACING_V2=false LANGSMITH_TRACING=false LANGCHAIN_TRACING=false ;;
+esac
 
 BUDGET=43200
 TRIAL_SECS=10800

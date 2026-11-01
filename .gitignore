@@ -19,3 +19,20 @@ workspace/
 *.npz
 *.pkl
 *.zip
+
+# Runtime records and local authentication are never distributed.
+*.log
+*.jsonl
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+artifacts/
+calls/
+request-cache/
+.coverage
+.ruff_cache/
+.mypy_cache/
+.DS_Store

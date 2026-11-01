@@ -41,8 +41,7 @@ python -m pytest -q
 ```
 
 The tests require no GPU training or LLM calls. When PyTorch is installed, three
-small CPU tests also exercise KuaiRec training and frozen inference. Packaging validation
-and the inherited compatibility checks are documented in [validation](docs/validation.md).
+small CPU tests also exercise KuaiRec training and frozen inference. Four historical compatibility expectations remain explicitly marked with `xfail`.
 
 ## Main experiment
 
@@ -96,7 +95,9 @@ starting. Preflight is a separate validation step and does not certify a later r
 | `gagc/templates/` | Cold-start training programs and predictor writers |
 | `tests/` | Synthetic regression and controller integration tests |
 
-`gagc` is retained as an internal compatibility package. `run2.sh`, `gr.sh` and
+`gagc` is the algorithm and benchmark layer; `recharness` is its execution and
+controller layer. The latest runner imports `gagc` routing, jump and memory tools,
+so both packages are required. They are not alternative implementations. `run2.sh`, `gr.sh` and
 `prepare_gr_data.py` preserve the earlier provider-based Amazon/KuaiRec entrypoints;
 install `pip install -e '.[legacy,templates]'` to use those scripts. The standalone
 `python -m recharness` entrypoint is the reproduction path for the latest method.
@@ -114,12 +115,33 @@ python scripts/review_artifact.py --archive ../recharness-review.zip
 The archive contains a neutral `code/` directory without Git history or local
 runtime outputs. Use the ZIP as supplementary material, or mirror its contents
 through an anonymous code host. A personal-account repository URL exposes its owner
-and must not be used as the anonymous review link. See [review packaging](docs/review.md).
+and must not be used as the anonymous review link. Existing Git contributor history
+is separate from the source snapshot; `python scripts/review_artifact.py --history`
+checks that metadata without including it in the ZIP.
 
 The artifact does not contain aggregate experimental results or claim that the
 paper-scale experiments were rerun during packaging. Execution uses trusted local
 subprocesses; withholding test paths from search context is a protocol boundary,
 not an operating-system security sandbox.
+
+## Distribution and external services
+
+Only program sources, configurations, tests, license and running instructions belong
+in this repository and its ZIP. The packager uses a strict path/type whitelist;
+logs, call transcripts, datasets, checkpoints, caches and generated reports are
+excluded. Runtime budget/state and evidence memory are still produced in the run
+output directory because the search algorithm uses them. Audit and anonymize any
+such records separately before sharing them.
+
+Extra external tracing is disabled by default, including when tracing credentials
+are inherited from the environment. Enable it only through
+`RECHARNESS_ENABLE_TRACING=true`. Training workers do not inherit provider tokens,
+passwords or SSH agent authentication. Run output directories are private by default.
+
+The configured LLM service receives the prompts and source needed for generation.
+Local source scanning does not establish that provider traffic or arbitrary generated
+code is private: these workers are trusted local processes, not an OS security jail.
+Never embed secrets or identifying material in model source supplied to an LLM.
 
 ## License
 

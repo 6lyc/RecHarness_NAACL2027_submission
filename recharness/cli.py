@@ -137,7 +137,7 @@ def main(argv=None):
         print(json.dumps({'valid': True, 'config': config}, indent=2))
         return
     output = Path(config['root'])
-    output.mkdir(parents=True, exist_ok=False)
+    output.mkdir(parents=True, exist_ok=False, mode=0o700)
     with (output / 'run.lock').open('w') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         os.environ['GAGC_ARM_DESIGN'] = 'semantic_v4'

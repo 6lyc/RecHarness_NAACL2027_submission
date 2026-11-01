@@ -446,7 +446,8 @@ def _trial_runtime_env(slot_id: int) -> tuple[dict[str, str], list[int]]:
         env.setdefault("BERT4REC_EPOCHS", "200")
         env.setdefault("NEXTITNET_EPOCHS", "200")
         env.setdefault("HSTU_EPOCHS", "200")
-    return env, cpu_set
+    from gagc.privacy import llm_environment
+    return llm_environment(env), cpu_set
 
 
 def _uses_claude_code_backend(spec: MutationSpec) -> bool:
@@ -2053,6 +2054,8 @@ def _execute_trial_impl(
         )
 
     env, cpu_set = _trial_runtime_env(slot_id)
+    from gagc.privacy import worker_environment
+    env = worker_environment(env)
 
     start = time.time()
     timed_out = False
@@ -3692,7 +3695,8 @@ def _final_runtime_env(slot_id: int = 0) -> dict[str, str]:
         env['GR_TEST_DATA'] = _GR_TEST_DATA
         env.pop('GR_TRAIN_DATA', None)
         env.pop('GR_VAL_DATA', None)
-    return env
+    from gagc.privacy import worker_environment
+    return worker_environment(env)
 
 
 def _amazon_final_metrics(predict_script: str) -> tuple[float | None, dict | None, dict | None, str | None]:

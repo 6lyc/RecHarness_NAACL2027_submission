@@ -85,6 +85,8 @@ Do not use α/β values to rank arms in this mode; they are retained only for lo
 
 def _build_model(llm_provider: str, model_id: str, api_key: str | None, base_url: str | None):
     """Construct the LangChain chat model for the given provider."""
+    from gagc.privacy import configure_tracing
+    configure_tracing()
     max_tokens = int(os.environ.get("GAGC_LLM_MAX_TOKENS", "4096"))
     if llm_provider == "volcengine":
         # VolcEngine Ark is OpenAI-compatible — use ChatOpenAI, not ChatAnthropic.
@@ -359,21 +361,16 @@ def create_gagc_agent(
         f"- /workspace/predict.py       — inference script\n"
         f"- /thompson_state/state.json  — Thompson Sampling + SkillOpt memory state\n"
         f"- /logs/iteration_<N>.json    — per-iteration logs\n"
-        f"\n## Real paths (use ONLY for trial-tool script_path and git diff)\n"
-        f"- trial-tool script_path      : {abs_workspace}/best.py\n"
-        f"- git diff workspace path     : {abs_workspace}\n"
-        f"  (use: bash(\"cd {abs_workspace} && git diff best.py\") to generate code_diff)\n"
-        f"\n## Other\n"
-        f"- data_dir       : {abs_data_dir}\n"
-        f"- test_dir       : {abs_test_dir}\n"
+        f"\n## Host-managed execution\n"
+        f"- trial-tool script_path : /workspace/best.py\n"
+        f"- training and validation data are provided through worker environment variables\n"
+        f"- the held-out test path is unavailable during search\n"
         f"- global_budget  : {global_budget_secs}s\n"
         f"- num_gpus       : {num_gpus}\n"
         f"- gpu_ids        : {gpu_ids or list(range(num_gpus))}\n"
         f"- cold_start     : {cold_start}\n"
         f"\nRULE: read_file/write_file/ls MUST use the virtual paths above (starting with\n"
-        f"/workspace/, /thompson_state/, /logs/). NEVER pass a real absolute path like\n"
-        f"{abs_workspace}/... to read_file — it will not be found.\n"
-        f"The ONLY exceptions are trial-tool script_path and bash commands for git diff.\n"
+        f"/workspace/, /thompson_state/, /logs/). Trial tools resolve /workspace/best.py on the host.\n"
     )
     if os.environ.get("GAGC_FULL_RANKING", "").strip().lower() in {"1", "true", "yes", "on"}:
         system_prompt += (
@@ -576,13 +573,9 @@ def create_gr_agent(
         f"- /workspace/best.py          — KuaiRec training script (RecHarness evolves this)\n"
         f"- /thompson_state/state.json  — Thompson Sampling + SkillOpt memory state\n"
         f"- /logs/iteration_<N>.json    — per-iteration logs\n"
-        f"\n## Real paths\n"
-        f"- trial-tool script_path      : {abs_workspace}/best.py\n"
-        f"- git diff workspace path     : {abs_workspace}\n"
-        f"  (use: bash(\"cd {abs_workspace} && git diff best.py\") to generate code_diff)\n"
-        f"\n## Data\n"
-        f"- GR_TRAIN_DATA : {_tools_module._GR_TRAIN_DATA}\n"
-        f"- GR_VAL_DATA   : {_tools_module._GR_VAL_DATA} (used during search)\n"
+        f"\n## Host-managed data and execution\n"
+        f"- trial-tool script_path : /workspace/best.py\n"
+        f"- GR_TRAIN_DATA and GR_VAL_DATA are provided by the host\n"
         f"- held-out test : managed by the host; unavailable during search\n"
         f"- cold_start    : {cold_start}\n"
         f"\n## Budget\n"
@@ -590,7 +583,7 @@ def create_gr_agent(
         f"- num_gpus      : {num_gpus}\n"
         f"- gpu_ids       : {gpu_ids or list(range(num_gpus))}\n"
         f"\nRULE: read_file/write_file/ls MUST use virtual paths (/workspace/, /thompson_state/, /logs/).\n"
-        f"NEVER pass a real absolute path to read_file. Use the real trial-tool script_path above for execute_trial, execute_trial_group, promote_winner, and evaluate_final_incumbent.\n"
+        f"Use /workspace/best.py for trial, promotion and final-evaluation tools; the host resolves it.\n"
     )
     if not use_thompson_sampling:
         system_prompt += TEXTUAL_GRADIENT_ROUTING_PROMPT
