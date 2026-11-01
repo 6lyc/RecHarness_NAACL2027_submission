@@ -5,14 +5,12 @@
 Use Linux, Python 3.10+ (3.11+ recommended), four CUDA GPU slots and 64 CPU cores for the registered
 experiment. Install the source checkout with `pip install -e '.[templates,dev]'`.
 Install and authenticate the LLM command-line executable separately; never store
-credentials in this tree. Provider choice is a transport setting. The recorded
-standalone configuration uses `gpt-6.1-sol` with `medium` effort, while the earlier
-compatibility scripts use a provider API. A replacement model is a different
-experimental configuration and should be reported explicitly.
+credentials in this tree. The standalone runner defaults to `gpt-6.1-sol` with
+`medium` effort. Select the model and effort with `--llm-model` and `--llm-effort`.
+The shell entrypoints use a provider API.
 
-The package uses lower dependency bounds and does not claim a fully locked
-historical environment. Record Python, CUDA, PyTorch, provider/CLI versions and
-hardware alongside each new run. This artifact includes no vendored runtime.
+Dependencies are specified in `pyproject.toml`. Python, CUDA and provider runtimes
+are installed separately.
 
 ## Amazon Reviews data
 
@@ -101,12 +99,11 @@ runs/<experiment>/
 Runtime records can contain local paths and provider metadata. They are not included
 in the review ZIP. Audit any additional experiment evidence before distributing it.
 
-## Compatibility entrypoints
+## Provider API entrypoints
 
-`bash run2.sh --help` and `bash gr.sh --help` describe the earlier Amazon and KuaiRec
-entrypoints. KuaiRec preprocessing uses `prepare_gr_data.py` and writes independent train,
-validation and test arrays; see the [KuaiRec protocol](kuairec.md) for exact
-partitioning, regeneration of older arrays and the required `--val-data` argument. These scripts require
-the optional `legacy` dependencies and provider environment variables; their agent
-workflow differs from the current standalone runner. Do not report the two execution
-paths as an identical method configuration.
+`bash run2.sh --help` and `bash gr.sh --help` describe the Amazon and KuaiRec
+provider API entrypoints. KuaiRec preprocessing uses `prepare_gr_data.py` and writes
+independent train, validation and test arrays. See the [KuaiRec protocol](kuairec.md)
+for partitioning and the required `--val-data` argument. Install the optional
+`legacy` dependencies and configure the provider environment variables to use
+these entrypoints.

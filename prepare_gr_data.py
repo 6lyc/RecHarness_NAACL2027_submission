@@ -197,7 +197,7 @@ def load_item_category_feat(data_raw: Path) -> pd.DataFrame:
 
 
 def load_item_duration(data_raw: Path, train: pd.DataFrame) -> pd.Series:
-    """Use training-only duration statistics; ignore earlier combined caches."""
+    """Compute item-duration statistics from training rows."""
     return train.groupby('item_id')['duration_normed'].mean()
 
 
@@ -321,13 +321,13 @@ def run(args) -> None:
             inputs[name] = digest(path)
     if any(p.exists() for p in paths.values()) and not args.no_cache:
         if not manifest.exists():
-            raise ValueError('Old arrays lack a verified three-way manifest; rebuild with --no-cache')
+            raise ValueError('Prepared arrays require a verified split manifest; use --no-cache')
         previous = json.loads(manifest.read_text())
         if previous.get('settings') != settings or previous.get('inputs') != inputs:
-            raise ValueError('Split configuration or inputs changed; rebuild with --no-cache')
+            raise ValueError('Cached split settings or input hashes do not match; use --no-cache')
         if any(not path.exists() or digest(path) != previous['files'][name]['sha256']
                for name, path in paths.items()):
-            raise ValueError('Prepared arrays changed or are incomplete; rebuild with --no-cache')
+            raise ValueError('Prepared arrays fail completeness or checksum checks; use --no-cache')
         print('Verified cached train/validation/test arrays')
         return
     big, small = load_interactions(raw_dir)

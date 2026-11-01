@@ -1,7 +1,6 @@
 # KuaiRec train/validation/test protocol
 
-The KuaiRec entrypoint now requires three independent files. The earlier two-file
-layout is not accepted as a held-out evaluation protocol.
+The KuaiRec workflow uses independent training, validation and test files.
 
 ## Prepare data
 
@@ -29,23 +28,13 @@ and `splits.json`:
 - `splits.json` records the seed, validation fraction, schema, input/output hashes,
   row counts and the number of overlapping big-matrix rows removed.
 
-Raw `big_matrix.csv` / `small_matrix.csv` are preferred. Processed CSV input is
-accepted only when raw watch-ratio/duration target columns are available; existing
-combined normalization caches are ignored. Cached arrays are reused only when the
-manifest, options, inputs and output hashes match.
+The input consists of `big_matrix.csv` and `small_matrix.csv`, or processed CSV
+files containing raw watch-ratio and duration columns. Normalization statistics
+are fitted on training rows. Cached arrays are reused when the manifest, options,
+inputs and output hashes match.
 
 The 53-column arrays use column 48 for play duration in seconds, column 49 for
-video duration in seconds, and column 50 for raw watch ratio. Earlier preprocessing
-wrote the latter two columns in reverse order. Regenerate old arrays explicitly:
-
-```bash
-python prepare_gr_data.py \
-  --raw-dir /path/to/kuairec --output-dir ./input/kuairec \
-  --validation-fraction 0.1 --seed 2024 --no-cache
-```
-
-This is the explicit three-way protocol of this artifact. Earlier two-file runs
-and their scores must be rerun before being reported under this protocol.
+video duration in seconds, and column 50 for raw watch ratio.
 
 ## Search and final evaluation
 
@@ -65,8 +54,8 @@ Other registered templates are `d2q`, `ks_d2q` (the D2Q alias) and `tpm`. The Py
 `create_gr_agent` API also requires `val_data` or an explicit `GAGC_GR_VAL_DATA`.
 It rejects missing validation, aliased/copied files, malformed arrays and user/item
 pair overlap across the three splits. The held-out path is omitted from agent
-context and search-worker variables. The historical `GR_TEST_DATA` search variable
-is a compatibility alias for validation, never the held-out test path.
+context and search-worker variables. During search, `GR_TEST_DATA` contains the
+validation path. The held-out test path is provided for final evaluation.
 
 Each template saves `gr_checkpoint.pt` at the epoch with highest validation
 WT-XAUC, breaking ties by lower WT-MAE. The host retains its exact source, model

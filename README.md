@@ -41,7 +41,7 @@ python -m pytest -q
 ```
 
 The tests require no GPU training or LLM calls. When PyTorch is installed, three
-small CPU tests also exercise KuaiRec training and frozen inference. Four historical compatibility expectations remain explicitly marked with `xfail`.
+small CPU tests also exercise KuaiRec training and frozen inference.
 
 ## Main experiment
 
@@ -97,13 +97,12 @@ starting. Preflight is a separate validation step and does not certify a later r
 
 `gagc` is the algorithm and benchmark layer; `recharness` is its execution and
 controller layer. The latest runner imports `gagc` routing, jump and memory tools,
-so both packages are required. They are not alternative implementations. `run2.sh`, `gr.sh` and
-`prepare_gr_data.py` preserve the earlier provider-based Amazon/KuaiRec entrypoints;
-install `pip install -e '.[legacy,templates]'` to use those scripts. The standalone
-`python -m recharness` entrypoint is the reproduction path for the latest method.
-The earlier scripts do not provide the standalone runner's evidence archive and
-single-model checks. KuaiRec uses the [three-way data and frozen-test protocol](docs/kuairec.md);
-`gr.sh` requires explicit `--val-data` and `--test-data` files.
+so both packages are required. `run2.sh` and `gr.sh` provide the Amazon and KuaiRec
+provider API entrypoints; install `pip install -e '.[legacy,templates]'` to use
+them. The standalone `python -m recharness` entrypoint runs the six-arm search,
+evidence archive and single-model checks. KuaiRec uses the
+[three-way data and frozen-test protocol](docs/kuairec.md); `gr.sh` requires
+explicit `--val-data` and `--test-data` files.
 
 ## Review artifact
 
@@ -119,10 +118,8 @@ and must not be used as the anonymous review link. Existing Git contributor hist
 is separate from the source snapshot; `python scripts/review_artifact.py --history`
 checks that metadata without including it in the ZIP.
 
-The artifact does not contain aggregate experimental results or claim that the
-paper-scale experiments were rerun during packaging. Execution uses trusted local
-subprocesses; withholding test paths from search context is a protocol boundary,
-not an operating-system security sandbox.
+Execution uses trusted local subprocesses; withholding test paths from search
+context is a protocol boundary, not an operating-system security sandbox.
 
 ## Distribution and external services
 

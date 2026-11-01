@@ -47,7 +47,7 @@ def test_normalization_ignores_evaluation_targets_and_durations():
     pd.testing.assert_frame_equal(original, changed)
 
 
-def test_preparation_writes_verified_three_way_arrays_and_invalidates_old_cache(tmp_path):
+def test_preparation_writes_verified_splits_and_checks_cache_manifest(tmp_path):
     raw, output = tmp_path / 'raw', tmp_path / 'input'
     raw.mkdir()
     big, small = interactions()
@@ -70,7 +70,7 @@ def test_preparation_writes_verified_three_way_arrays_and_invalidates_old_cache(
     preparation.run(args)
     assert (output / 'val_data.npy').stat().st_mtime_ns == before
     (output / 'splits.json').unlink()
-    with pytest.raises(ValueError, match='Old arrays'):
+    with pytest.raises(ValueError, match='verified split manifest'):
         preparation.run(args)
 
 
