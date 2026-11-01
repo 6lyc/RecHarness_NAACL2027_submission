@@ -33,9 +33,8 @@ class MutationSpec:
     """Additional proposal metadata preserved for logging / state updates.
 
     Examples include arm, composite_dims, code_hint, hypothesis, is_jumping,
-    predict_code_edits, and predict_code_content. Older versions silently dropped
-    these fields, which made downstream ExperimentSkill lessons degrade to
-    unknown/unknown.
+    predict_code_edits, and predict_code_content. These fields preserve the
+    selected scope and source references used by ExperimentSkill and promotion.
     """
 
     def __init__(self, dimension: str, delta: float, estimated_cost_secs: float,
@@ -53,7 +52,7 @@ class MutationSpec:
 
     @staticmethod
     def _normalize_code_edits(code_edits: list) -> list[dict[str, str]]:
-        """Accept canonical dict edits and legacy [find, replace] pairs."""
+        """Accept dictionary edits and [find, replace] pairs."""
         normalised: list[dict[str, str]] = []
         for edit in code_edits:
             if isinstance(edit, dict):

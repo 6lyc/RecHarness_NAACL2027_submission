@@ -1,4 +1,4 @@
-"""Shared execution, accounting, and LLM transport for matched experiments."""
+"""Execution, budget accounting and structured LLM transport."""
 import ast
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
@@ -109,16 +109,16 @@ class Ledger:
                                      'overrun_seconds': max(0., elapsed - reservation)}
 
 
-TASK = '''Matched RecHarness Amazon task: four datasets Movies_and_TV,
+TASK = '''RecHarness Amazon task: four datasets Movies_and_TV,
 Industrial_and_Scientific, Electronics, CDs_and_Vinyl, macro-average validation
-HR@10. Start from the corrected family-specific cold start supplied by the host. Preserve that model family. Preprocessing seed=0 and training
-seed=42, exactly as run2.sh. The host executes your train.py and then independently
+HR@10. Start from the family-specific cold start supplied by the host. Preserve that model family. Preprocessing seed=0 and training
+seed=42. The host executes your train.py and then independently
 evaluates working/predict.py using the pinned RecHarness benchmark (200 validation
 users/category, 99 unique negative candidates, evaluation seed=42). Test labels and
 test metrics are unavailable during search. Retain all four categories and dataset
 routing. DATA_DIR must remain os.environ['GAGC_DATA_DIR']; write artifacts beneath
 your trial directory, as the baseline does. Training may change model architecture,
-loss, optimizer, sampling and hyperparameters, as in RecHarness. Do not alter input
+loss, optimizer, sampling and hyperparameters. Do not alter input
 splits, invent metrics, read hidden test files, fetch extra datasets/pretrained weights,
 or change the host evaluator. Changes to inference must also update the predictor
 writer so working/predict.py loads the trained architecture. Keep execution single-GPU;
@@ -126,9 +126,7 @@ the host provides four concurrent trial slots and 64 CPU cores. No shell actions
 filesystem inspection, or training tools are needed in the LLM call: return code.
 All training, diagnostics, debugging and failed trials consume the method's shared
 43,200 GPU-second search budget. LLM time and final held-out inference are recorded
-separately, matching run2.sh's separate final-evaluation step.
-The original RecHarness tools layer sets SASREC_EPOCHS=200 (overriding the template's
-standalone default of 300); this same environment default applies here.
+separately. The host sets SASREC_EPOCHS=200.
 '''
 
 
@@ -191,7 +189,7 @@ class Controller:
     def baseline(self):
         path = Path(self.c['baseline']['source'])
         if sha(path) != self.c['baseline']['sha256']:
-            raise RuntimeError('Registered corrected baseline changed')
+            raise RuntimeError('Registered baseline source changed')
         return path.read_text()
 
     def trial(self, key, source, gpu, requested=None, files=None, smoke=False):

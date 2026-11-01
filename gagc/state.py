@@ -44,7 +44,7 @@ class ThompsonState:
     # Basin-jumping support
     pending_queue: list[dict] = field(default_factory=list)     # [{dim, t_start}]
     provisional_incumbent: dict = field(default_factory=dict)    # best code snapshot before provisional jump
-    # Jump v2: global score_history remains monotone; these track the live basin.
+    # Global score_history remains monotone; these fields track the active basin.
     current_basin_score: float | None = None
     basin_score_history: dict[str, list[float]] = field(default_factory=dict)
     initial_budget_secs: float = 0.0

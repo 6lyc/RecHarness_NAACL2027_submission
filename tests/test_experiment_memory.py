@@ -1,3 +1,4 @@
+"""Exercise evidence memory using synthetic metric sequences and mock workers."""
 import json
 from pathlib import Path
 

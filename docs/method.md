@@ -2,7 +2,7 @@
 
 The current policy is `semantic_v4`; evidence memory has schema version 2.
 `recharness.runner.FamilyJumpController` combines the native routing/promotion state
-machine with a matched external worker and a structured LLM transport.
+machine with an external evaluation worker and a structured LLM transport.
 
 ## Local search
 

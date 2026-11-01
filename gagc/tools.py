@@ -1091,7 +1091,7 @@ def _active_fixed_discovery_arm() -> str | None:
 
 
 def _active_dimensions() -> list[str]:
-    """Original flat dimension list (for backward compat where needed)."""
+    """Return the flat dimension list for the active benchmark and arm policy."""
     if _BENCHMARK_MODE == 'amazon_reviews' and semantic_arms.enabled():
         return list(semantic_arms.ALL)
     return _GR_ALL_DIMENSIONS if _BENCHMARK_MODE == "kuairec" else _ALL_DIMENSIONS
@@ -1696,9 +1696,8 @@ def propose_action_group(
             f"fixed discovery slot inserted: {fixed_discovery_arm}; remaining slots use {routing_policy} routing"
         )
 
-    # Detect jumping round. In this old-lowlevel-arm ablation, Amazon Reviews
-    # uses explicit low-level jumping dimensions such as change_architecture and
-    # change_loss_function; when selected, the round is isolated as G=1.
+    # Detect a jump from the selected arms. Explicit structural directions run
+    # alone; semantic combinations use the budgeted multi-candidate batch.
     jumping_arms = _active_jumping_dims()
     is_jumping_round = any(a in jumping_arms for a in selected_arms)
     jump_selected_arm = next((a for a in selected_arms if a in jumping_arms), None)
@@ -1706,7 +1705,7 @@ def propose_action_group(
         selection_notes.append(f"jump suppressed: {jump_gate['jump_suppressed_reason']}")
 
     if is_jumping_round:
-        # Legacy jumps run alone; semantic-v4 retains the budgeted batch.
+        # Single-direction jumps run alone; semantic-v4 retains its batch.
         if not (_BENCHMARK_MODE == 'amazon_reviews' and semantic_arms.enabled()):
             selected_arms = [jump_selected_arm or next(a for a in selected_arms if a in jumping_arms)]
         if _BENCHMARK_MODE == 'amazon_reviews':

@@ -1,4 +1,4 @@
-"""Native RecHarness routing/promotion/memory with the matched Codex executor."""
+"""Candidate execution with native routing, promotion and memory updates."""
 import ast
 from copy import deepcopy
 import hashlib
@@ -87,7 +87,7 @@ class RecHarnessController(Controller):
         native._LAST_PROMOTION_RESULT = {}
         native._LAST_TRIAL_GROUP_ID = ''
         # A code-generation failure consumes zero GPU seconds. Do not let the
-        # native legacy zero-duration fallback charge LLM wall time as compute.
+        # zero-duration fallback charge LLM wall time as compute.
         native._trial_group_wall_time_secs = matched_group_cost
         initial = ThompsonState(arms={arm: ArmState(name=arm) for arm in native._active_arms()},
              global_budget=self.c['search_budget_gpu_seconds'],

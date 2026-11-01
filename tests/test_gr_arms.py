@@ -24,8 +24,7 @@ def test_gr_arm_structure(monkeypatch):
 
 
 @pytest.mark.xfail(
-    reason="stale: jumping round now returns group_size (4) candidates instead of 1; README "
-           "states jumping rounds run a single jump. Verify if regression or intended change.",
+    reason="This score sequence has no three-round plateau, so the jump gate stays closed.",
     strict=False,
 )
 def test_gr_decoder_backbone_candidate_uses_claude_backend(monkeypatch):

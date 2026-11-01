@@ -122,7 +122,7 @@ if [[ ! -f "$TRAIN_DATA" ]] || [[ ! -f "$VAL_DATA" ]] || [[ ! -f "$TEST_DATA" ]]
     exit 1
 fi
 
-# Install the legacy-compatible package if needed.
+# Install the package if needed.
 if ! $PYTHON -c "import gagc" 2>/dev/null; then
     log_info "The gagc compatibility package is not installed; running pip install -e ."
     pip install -e "${PROJ_ROOT}" -q || die "pip install -e . failed"

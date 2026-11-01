@@ -185,8 +185,7 @@ def test_amazon_strategy_jump_gate_closed_returns_normal_candidates(monkeypatch)
 
 
 @pytest.mark.xfail(
-    reason="stale: textual strategy-arm (capacity_strategy) is no longer routed as a single "
-           "jumping candidate; _AMAZON_JUMP_ELIGIBLE_STRATEGY_ARMS is empty. Verify intended.",
+    reason="capacity_strategy is not an executable low-level jump arm in this policy.",
     strict=False,
 )
 def test_amazon_strategy_jump_gate_open_marks_selected_eligible_arm(monkeypatch):
@@ -216,8 +215,7 @@ def test_amazon_strategy_jump_gate_open_marks_selected_eligible_arm(monkeypatch)
 
 
 @pytest.mark.xfail(
-    reason="stale: textual strategy-arm (optimization_strategy) was replaced by low-level "
-           "Thompson sampling arms. Verify intended.",
+    reason="optimization_strategy is not an active low-level arm in this policy.",
     strict=False,
 )
 def test_amazon_strategy_jump_gate_open_does_not_force_noneligible_arm(monkeypatch):
@@ -246,8 +244,7 @@ def test_amazon_strategy_jump_gate_open_does_not_force_noneligible_arm(monkeypat
 
 
 @pytest.mark.xfail(
-    reason="stale: pending-queue jump suppression no longer emits strategy arms "
-           "(capacity/representation_strategy). Verify intended.",
+    reason="The low-level routing policy does not emit textual strategy labels.",
     strict=False,
 )
 def test_amazon_pending_retune_suppresses_jump_without_whitelist(monkeypatch):

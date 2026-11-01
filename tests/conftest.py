@@ -1,4 +1,4 @@
-"""Run inherited low-level-arm regressions in their original policy mode."""
+"""Select the arm policy required by each regression module."""
 import pytest
 
 

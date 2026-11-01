@@ -133,7 +133,7 @@ log_info "Project root: ${PROJ_ROOT}"
     || die "VOLCENGINE_API_KEY is not set. Export it before running this script."
 
 if ! $PYTHON -c "import gagc" 2>/dev/null; then
-    log_info "The legacy-compatible gagc package is not installed; running pip install -e ."
+    log_info "The gagc package is not installed; running pip install -e ."
     pip install -e "${PROJ_ROOT}" -q || die "pip install -e . failed"
 fi
 $PYTHON -c "import gagc" 2>/dev/null || die "The gagc compatibility package could not be imported"

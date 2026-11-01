@@ -1,3 +1,4 @@
+"""Exercise jump budgeting and rollback with synthetic scores and source fixtures."""
 from copy import deepcopy
 import json
 import importlib.util

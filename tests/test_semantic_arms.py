@@ -1,3 +1,4 @@
+"""Exercise semantic routing and promotion with synthetic scores."""
 from copy import deepcopy
 import json
 from pathlib import Path

@@ -5,11 +5,11 @@
     "immutable_observations": "every completed candidate, no 50-record truncation in archive; versioned/checksummed atomic JSON; conflicting rewrites rejected",
     "program_archive": "exact before/after source files addressed by SHA256; AST hashes support source-duplicate checks",
     "hot_state": "last 50 observations plus last 8 textual lessons; full archive remains retrievable",
-    "lifecycle_events": "append separate idempotent jump acceptance/rejection/incomplete-window events; interpret historical observations without overwriting them",
+    "lifecycle_events": "append separate idempotent jump acceptance/rejection/incomplete-window events; interpret observations from this run without overwriting them",
     "request_context": "balanced retrieval by source, arm, basin, best validation, negative evidence and recency; at most 12 records and 18000 Unicode characters; each request context saved for review"
   },
   "record_fields": [
-    "original hypothesis and original/repair proposal history",
+    "initial hypothesis and proposal/repair attempts from this run",
     "actual parameter source-expression changes and changed method names",
     "before/after raw and AST-normalized hashes; patch hash and excerpt",
     "group-best vs promoted vs provisional status",
@@ -20,18 +20,18 @@
     "jump window ID and reconciled final outcome"
   ],
   "duplicate_policy": "reject previously successful AST-identical programs within this run before GPU dispatch; existing three implementation attempts request a different edit; failed/time-limited configurations remain repairable; no cross-run response/checkpoint reuse",
-  "retrieval_policy": "coverage first, verbose excerpts second; irrelevant provisional source snapshots and inherited generic memory payloads excluded; old high-quality or negative observations remain accessible beyond the hot window",
+  "retrieval_policy": "coverage first, verbose excerpts second; exclude irrelevant source snapshots and generic memory payloads; observations from this run remain accessible beyond the hot window",
   "training_facts": "only supplied train files: user/item history counts, repeat counts, median/p95 length, number of histories above 128; supplied to hypothesis and implementation stages",
   "interpretation_rules": [
     "one validation result is a configuration-specific observation, not a general causal claim",
     "timeout at a recorded cap is censored performance evidence, not proof of poor model quality",
     "accepted jump includes retune effects, with no isolated component attribution",
-    "rolled-back basin observations remain historical and are not the active incumbent",
+    "rolled-back basin observations remain archived within this run and do not represent the active incumbent",
     "source expressions are not claimed to be resolved runtime parameter values",
     "AST identity is not general functional equivalence; identical checkpoints do not prove identical predictions"
   ],
   "limits": [
-    "no held-out-test feedback or cross-run historical import",
+    "no feedback from held-out tests or other runs",
     "archive restoration supports evidence retrieval; it does not authorize automatic experiment resume",
     "data-dependent no-ops beyond exact source/weight identity still require independent validation"
   ]

@@ -1,6 +1,6 @@
 {
   "version": "jump-v4-multicombination",
-  "scope": "Amazon Reviews matched experiments; model family remains constrained by original prompts",
+  "scope": "Amazon Reviews search within the registered model family",
   "global_budget_change": "none; reservation and all failed attempts are charged within the existing cap",
   "enabled_by_default": true,
   "local_promotion": "compare against current basin incumbent; preserve monotone global validation history",

@@ -147,7 +147,7 @@ def retrieve(state, selected, source, limit=12, records=None, max_chars=CONTEXT_
             'A single validation observation is configuration-specific evidence, not a general causal rule. '
             'Timeout is incomplete evidence at its recorded cap; repaired attempts do not erase earlier failures. '
             'Jump acceptance includes four retune rounds and gives no isolated component attribution. '
-            'Rolled-back basin records remain historical observations, not the current incumbent. '
+            'Records from a rolled-back basin stay archived within this run and do not describe the current incumbent. '
             'AST identity detects source duplicates, not functional equivalence. Identical checkpoints '
             'alone do not prove identical predictions. Training facts must support proposed features: '
             'zero repeated items means repeat-count features have no variation on the observed histories.'}
