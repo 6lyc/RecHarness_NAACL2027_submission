@@ -2,8 +2,7 @@
 
 Anonymous code artifact for review. The primary implementation is the six-arm,
 family-preserving RecHarness method with budgeted combination jumps and within-run
-evidence memory. No author list, affiliations, paper link, experiment logs, data,
-checkpoints, or prior search memory are included.
+evidence memory.
 
 ## Method
 
@@ -120,25 +119,6 @@ checks that metadata without including it in the ZIP.
 
 Execution uses trusted local subprocesses; withholding test paths from search
 context is a protocol boundary, not an operating-system security sandbox.
-
-## Distribution and external services
-
-Only program sources, configurations, tests, license and running instructions belong
-in this repository and its ZIP. The packager uses a strict path/type whitelist;
-logs, call transcripts, datasets, checkpoints, caches and generated reports are
-excluded. Runtime budget/state and evidence memory are still produced in the run
-output directory because the search algorithm uses them. Audit and anonymize any
-such records separately before sharing them.
-
-Extra external tracing is disabled by default, including when tracing credentials
-are inherited from the environment. Enable it only through
-`RECHARNESS_ENABLE_TRACING=true`. Training workers do not inherit provider tokens,
-passwords or SSH agent authentication. Run output directories are private by default.
-
-The configured LLM service receives the prompts and source needed for generation.
-Local source scanning does not establish that provider traffic or arbitrary generated
-code is private: these workers are trusted local processes, not an OS security jail.
-Never embed secrets or identifying material in model source supplied to an LLM.
 
 ## License
 
