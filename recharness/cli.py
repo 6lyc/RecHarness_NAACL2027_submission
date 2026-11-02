@@ -9,6 +9,7 @@ import time
 
 from .core import read, save
 from .paths import DATASETS, REPO, sha
+from . import llm_config
 
 FAMILIES = {
     'sasrec': 'perdataset',
@@ -67,9 +68,7 @@ def configure(args):
         'search_budget_gpu_seconds': args.budget, 'trial_floor_reference_seconds': 10800,
         'trial_timeout_seconds': args.trial_timeout, 'minimum_trial_seconds': 300,
         'final_timeout_seconds': 1800, 'single_model_search': True,
-        'llm_model': args.llm_model, 'llm_effort': args.llm_effort,
-        'llm_timeout': args.llm_timeout, 'llm_attempts': 3,
-        'retry_backoff_seconds': [5, 15], 'global_llm_concurrency': 4,
+        **llm_config.configuration(args),
         'llm_slot_directory': str(output / 'llm-slots'),
         'alignment': {
             'datasets': DATASETS, 'preprocessing_seed': 0, 'training_seed': 42,
@@ -115,21 +114,24 @@ def preflight(config):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('mode', choices=['check', 'preflight', 'run'])
-    parser.add_argument('--data-dir', type=Path, required=True)
-    parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('mode', nargs='?', choices=['check', 'preflight', 'run'], default='run')
+    parser.add_argument('--data-dir', type=Path)
+    parser.add_argument('--output', type=Path)
     parser.add_argument('--family', choices=list(FAMILIES), default='sasrec')
-    parser.add_argument('--gpus', type=integers, required=True)
+    parser.add_argument('--gpus', type=integers)
     parser.add_argument('--cpu-cores', type=integers,
                         default=sorted(os.sched_getaffinity(0))[:64])
     parser.add_argument('--budget', type=float, default=43200)
     parser.add_argument('--trial-timeout', type=float, default=16200)
     parser.add_argument('--worker-python', default=sys.executable)
-    parser.add_argument('--llm-model', default='gpt-6.1-sol')
-    parser.add_argument('--llm-effort', choices=['low', 'medium', 'high'], default='medium')
-    parser.add_argument('--llm-timeout', type=float, default=1200)
+    llm_config.add_arguments(parser)
     args = parser.parse_args(argv)
     try:
+        if args.print_llm_config:
+            llm_config.print_configuration(args)
+            return
+        if args.data_dir is None or args.output is None or args.gpus is None:
+            parser.error('--data-dir, --output and --gpus are required')
         config = configure(args)
     except ValueError as exc:
         parser.error(str(exc))

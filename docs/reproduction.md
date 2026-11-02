@@ -7,10 +7,38 @@ experiment. Install the source checkout with `pip install -e '.[templates,dev]'`
 Install and authenticate the LLM command-line executable separately; never store
 credentials in this tree. The standalone runner defaults to `gpt-6.1-sol` with
 `medium` effort. Select the model and effort with `--llm-model` and `--llm-effort`.
-The shell entrypoints use a provider API.
+The shell entrypoints use the same Codex transport and defaults.
 
 Dependencies are specified in `pyproject.toml`. Python, CUDA and provider runtimes
 are installed separately.
+
+## LLM configuration by entrypoint
+
+| Entrypoint | Workload | Transport | Model | Reasoning effort |
+| --- | --- | --- | --- | --- |
+| `python -m recharness`, `bash run2.sh`, `recharness` | Amazon; SASRec, GRU4Rec, BERT4Rec, NextItNet, HSTU | Codex CLI | `gpt-6.1-sol` | `medium` |
+| `python -m recharness.kuai_cli`, `bash gr.sh`, `recharness-kuai` | KuaiRec; GR, D2Q, TPM | Codex CLI | `gpt-6.1-sol` | `medium` |
+
+Every entrypoint uses one configuration for both hypothesis generation and code
+implementation. `--llm-model`, `--llm-effort` and `--llm-timeout` (default 1200
+seconds per attempt) apply to both workloads. No temperature override is supplied.
+Model settings are explicit CLI arguments; provider-specific environment variables
+do not override them. Authenticate the Codex executable separately.
+
+Inspect effective settings without data files, GPU allocation or an LLM call:
+
+```bash
+python -m recharness --print-llm-config
+bash run2.sh --print-llm-config
+bash gr.sh --print-llm-config
+bash gr.sh --llm-model gpt-6.1-sol --llm-effort medium --print-llm-config
+```
+
+Each run saves the settings in `config.json` and records model/effort in per-call
+receipts. Calls share the same concurrency locks, bounded retries, structured-response
+validation and request cache within that run. Training workers do not receive LLM
+credentials. The shell wrappers accept the same arguments as their Python modules;
+`RECHARNESS_PYTHON` can select the Python executable used by either wrapper.
 
 ## Amazon Reviews data
 
@@ -99,11 +127,10 @@ runs/<experiment>/
 Runtime records can contain local paths and provider metadata. They are not included
 in the review ZIP. Audit any additional experiment evidence before distributing it.
 
-## Provider API entrypoints
+## KuaiRec entrypoint
 
-`bash run2.sh --help` and `bash gr.sh --help` describe the Amazon and KuaiRec
-provider API entrypoints. KuaiRec preprocessing uses `prepare_gr_data.py` and writes
-independent train, validation and test arrays. See the [KuaiRec protocol](kuairec.md)
-for partitioning and the required `--val-data` argument. Install the optional
-`legacy` dependencies and configure the provider environment variables to use
-these entrypoints.
+`bash gr.sh --help` describes the KuaiRec check/preflight/run commands. Preprocessing
+uses `prepare_gr_data.py` and writes independent train, validation and test arrays.
+See the [KuaiRec protocol](kuairec.md) for partitioning and required inputs.
+Both tasks use the same LLM defaults; their data, metrics and search-arm definitions
+follow their respective benchmark protocols.

@@ -29,7 +29,9 @@ Details and defaults: [method](docs/method.md), [reproduction](docs/reproduction
 Use Linux and Python 3.10+ (3.11+ recommended). A CUDA-enabled PyTorch environment is required for
 training. The primary runtime calls an independently authenticated `codex`
 executable on `PATH`; it accepts `--llm-model` and `--llm-effort` explicitly.
-The experiment default is `gpt-6.1-sol` with `medium` reasoning effort.
+All entrypoints default to `gpt-6.1-sol` with `medium` reasoning effort for both
+hypothesis generation and code implementation;
+see [LLM configuration by entrypoint](docs/reproduction.md#llm-configuration-by-entrypoint).
 
 ```bash
 python3 -m venv .venv
@@ -84,6 +86,7 @@ starting. Preflight is a separate validation step and does not certify a later r
 | --- | --- |
 | `recharness/cli.py` | Portable check/preflight/run entrypoint and input fingerprints |
 | `recharness/runner.py` | Latest family-preserving search and evidence integration |
+| `recharness/kuai_cli.py`, `recharness/kuai_runner.py` | KuaiRec host loop and frozen evaluation |
 | `recharness/controller.py`, `recharness/core.py` | Candidate execution, shared budget ledger and final selection |
 | `recharness/transport.py` | Structured LLM requests, retries and within-run request identity |
 | `recharness/worker.py`, `recharness/single_model.py` | External evaluation and model/checkpoint checks |
@@ -96,9 +99,9 @@ starting. Preflight is a separate validation step and does not certify a later r
 
 `gagc` is the algorithm and benchmark layer; `recharness` is its execution and
 controller layer. The latest runner imports `gagc` routing, jump and memory tools,
-so both packages are required. `run2.sh` and `gr.sh` provide the Amazon and KuaiRec
-provider API entrypoints; install `pip install -e '.[legacy,templates]'` to use
-them. The standalone `python -m recharness` entrypoint runs the six-arm search,
+so both packages are required. `run2.sh` wraps `python -m recharness` for Amazon,
+and `gr.sh` wraps `python -m recharness.kuai_cli` for KuaiRec. Both use the shared
+Codex transport and model settings. The Amazon entrypoint runs the six-arm search,
 evidence archive and single-model checks. KuaiRec uses the
 [three-way data and frozen-test protocol](docs/kuairec.md); `gr.sh` requires
 explicit `--val-data` and `--test-data` files.

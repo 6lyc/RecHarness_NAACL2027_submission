@@ -36,7 +36,7 @@ _TIMEOUT_SCORE = -1.0
 _OOM_SCORE = -0.5
 _CRASH_SCORE = 0.0
 
-# Module-level store reference — injected by agent.py so update_thompson_state
+# Module-level store reference — injected by the host controller so update_thompson_state
 # can persist state directly without LLM write_file involvement.
 _STORE: Any = None
 _STORE_NAMESPACE: tuple = ("gagc", "thompson")

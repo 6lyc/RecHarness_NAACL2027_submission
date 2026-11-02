@@ -19,8 +19,6 @@ def digest(value):
 class LLMTransport:
 
     @contextmanager
-
-    @contextmanager
     def llm_slot(self):
         folder = Path(self.c['llm_slot_directory'])
         folder.mkdir(parents=True, exist_ok=True)
@@ -74,7 +72,8 @@ class LLMTransport:
         from .codex_schema import remove_optional_nulls
         import jsonschema
         original = output_schema or schema({'text': TEXT})
-        identity = {'instruction': instruction, 'schema': original, 'search': search,
+        task = getattr(self, 'task', TASK)
+        identity = {'task': task, 'instruction': instruction, 'schema': original, 'search': search,
                     'model': self.c['llm_model'], 'effort': self.c['llm_effort'], 'scope': self.scope.get()}
         cache_key = digest(identity)
         cache = self.root / 'request-cache' / (cache_key + '.json')
@@ -92,7 +91,7 @@ class LLMTransport:
                 self.call_index += 1
                 directory = self.root / 'calls' / f'{self.call_index:05d}'
                 directory.mkdir(parents=True, exist_ok=False)
-            prompt = TASK + '\nMETHOD: ' + self.method + '\n' + instruction
+            prompt = task + '\nMETHOD: ' + self.method + '\n' + instruction
             if output_schema is None:
                 prompt += '\nReturn the requested completion verbatim inside the JSON text field.'
             if len(prompt) > 950000:
