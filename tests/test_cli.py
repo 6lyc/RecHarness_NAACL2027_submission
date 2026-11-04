@@ -46,3 +46,16 @@ def test_check_rejects_missing_test_split(tmp_path, monkeypatch):
     with pytest.raises(SystemExit) as error:
         cli.main(['check', *args])
     assert error.value.code == 2
+
+
+@pytest.mark.parametrize('name', ['text_name_dict.json.gz', 'Movies_and_TV_text_name_dict.json.gz'])
+def test_check_rejects_interaction_metadata_in_training_directory(tmp_path, monkeypatch, name):
+    monkeypatch.setattr(cli.os, 'sched_getaffinity', lambda _: set(range(64)))
+    args = arguments(tmp_path)
+    metadata = tmp_path / 'input/trainval' / name
+    metadata.write_bytes(b'synthetic auxiliary metadata')
+    with pytest.raises(SystemExit) as error:
+        cli.main(['check', *args])
+    assert error.value.code == 2
+    assert not (tmp_path / 'run').exists()
+    assert metadata.exists()

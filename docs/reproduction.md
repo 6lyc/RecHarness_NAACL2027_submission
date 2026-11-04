@@ -42,7 +42,7 @@ credentials. The shell wrappers accept the same arguments as their Python module
 
 ## Amazon Reviews data
 
-Supply the Amazon Reviews 2023 benchmark splits and category metadata locally:
+Supply the Amazon Reviews 2023 benchmark splits locally:
 
 ```text
 <raw-data>/
@@ -50,8 +50,6 @@ Supply the Amazon Reviews 2023 benchmark splits and category metadata locally:
     <category>.train.csv
     <category>.valid.csv
     <category>.test.csv
-  raw/meta_categories/
-    meta_<category>.jsonl
 ```
 
 The categories are `Movies_and_TV`, `Industrial_and_Scientific`, `Electronics` and
@@ -75,7 +73,6 @@ input/
   trainval/
     <category>_train.txt
     <category>_valid.txt
-    <category>_text_name_dict.json.gz
     dataset_stats.json
   test/
     <category>_test.txt

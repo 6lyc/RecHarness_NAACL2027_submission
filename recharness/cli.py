@@ -31,6 +31,10 @@ def integers(value):
 
 
 def fingerprint(data):
+    metadata = [data / 'trainval/text_name_dict.json.gz',
+                *(data / 'trainval').glob('*_text_name_dict.json.gz')]
+    if any(path.exists() or path.is_symlink() for path in metadata):
+        raise ValueError('Remove text_name_dict.json.gz auxiliary metadata from the training directory')
     files = {}
     for dataset in DATASETS:
         for folder, suffix in [('trainval', '_train.txt'), ('trainval', '_valid.txt'),

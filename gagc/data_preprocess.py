@@ -24,7 +24,6 @@ Output files:
     <data_dir>/<dataset>_train.txt   -- training interactions  (user_id item_id per line)
     <data_dir>/<dataset>_valid.txt   -- validation interactions
     <test_dir>/<dataset>_test.txt    -- test interactions
-    <data_dir>/text_name_dict.json.gz -- item text metadata (title, description, timestamp)
 """
 
 import os
@@ -32,7 +31,6 @@ import gzip
 import json
 import argparse
 import random
-import pickle
 import numpy as np
 from tqdm import tqdm
 from collections import defaultdict
@@ -49,6 +47,16 @@ DEFAULT_SAMPLE_RATE = {
     'Industrial_and_Scientific': 1.0,
     'CDs_and_Vinyl': 0.33,
 }
+
+
+def _remove_text_metadata(fname: str, data_dir: str) -> None:
+    """Remove auxiliary interaction metadata from the split output directory."""
+    for name in (f'{fname}_text_name_dict.json.gz', 'text_name_dict.json.gz'):
+        try:
+            os.remove(os.path.join(data_dir, name))
+        except FileNotFoundError:
+            pass
+
 
 def _filter_user_item_5core(
     by_user: dict[str, list[tuple[int, str]]],
@@ -125,9 +133,7 @@ def _write_leave_one_out_splits(
             f.write(f"{user_id} {item_id}\n")
     print(f"Wrote {path}: {len(splits['test'])} interactions", flush=True)
 
-    text_dict = {"time": defaultdict(dict), "description": {}, "title": {}}
-    with open(os.path.join(data_dir, "text_name_dict.json.gz"), "wb") as tf:
-        pickle.dump(text_dict, tf)
+    _remove_text_metadata(fname, data_dir)
     print(f"Final users={len(usermap)} items={len(itemmap)}", flush=True)
 
 
@@ -280,8 +286,8 @@ def preprocess_raw_5core(
 
     Args:
         fname:        Dataset/category name (e.g. 'Industrial_and_Scientific').
-        local_dir:    Local dataset root containing split CSVs and metadata.
-        data_dir:     Output directory for train/valid files and text metadata.
+        local_dir:    Local dataset root containing split CSVs.
+        data_dir:     Output directory for train/valid files.
                       Defaults to './../data_<fname>'.
         test_dir:     Output directory for test file. Defaults to data_dir.
         sample_ratio: Fraction of users to keep (0, 1].  If None, uses the
@@ -315,20 +321,7 @@ def preprocess_raw_5core(
         dataset[split] = pd.read_csv(path).to_dict(orient='records')
 
     # ------------------------------------------------------------------ #
-    # 2. Load item metadata                                               #
-    # ------------------------------------------------------------------ #
-    print("Loading local raw_meta data...")
-    meta_path = os.path.join(local_dir, 'raw', 'meta_categories', f'meta_{fname}.jsonl')
-    if not os.path.isfile(meta_path):
-        raise FileNotFoundError(f"Expected local metadata file {meta_path}")
-    meta_dict = {}
-    with open(meta_path, 'r') as f:
-        for line in tqdm(f, desc="Loading metadata"):
-            record = json.loads(line.strip())
-            meta_dict[record['parent_asin']] = [record['title'], record['description']]
-
-    # ------------------------------------------------------------------ #
-    # 3. Build raw user / item maps                                       #
+    # 2. Build raw user / item maps                                       #
     # ------------------------------------------------------------------ #
     usermap = {}
     usernum = 0
@@ -336,8 +329,6 @@ def preprocess_raw_5core(
     itemnum = 0
     User = defaultdict(list)
     User_s = {'train': defaultdict(list), 'valid': defaultdict(list), 'test': defaultdict(list)}
-    id2asin = {}
-    time_dict = defaultdict(dict)
 
     for t in ['train', 'valid', 'test']:
         for l in tqdm(dataset[t], desc=f"Mapping {t}"):
@@ -356,11 +347,9 @@ def preprocess_raw_5core(
 
             User[userid].append(itemid)
             User_s[t][userid].append(itemid)
-            id2asin[itemid] = asin
-            time_dict[itemid][userid] = l['timestamp']
 
     # ------------------------------------------------------------------ #
-    # 4. Subsample users                                                  #
+    # 3. Subsample users                                                  #
     # ------------------------------------------------------------------ #
     if sample_ratio is None:
         sample_ratio = DEFAULT_SAMPLE_RATE.get(fname, 1.0)
@@ -381,14 +370,13 @@ def preprocess_raw_5core(
                 CountU[key] += 1
 
     # ------------------------------------------------------------------ #
-    # 5. Write output files                                               #
+    # 4. Write output files                                               #
     # ------------------------------------------------------------------ #
     usermap_final = {}
     itemmap_final = {}
     usernum_final = 0
     itemnum_final = 0
     use_train_dict = defaultdict(int)
-    text_dict = {'time': defaultdict(dict), 'description': {}, 'title': {}}
 
     for t in ['train', 'valid', 'test']:
         d = dataset[t]
@@ -399,7 +387,6 @@ def preprocess_raw_5core(
 
         for l in tqdm(d, desc=f"Writing {t}"):
             user_id = l['user_id']
-            asin = l['parent_asin']
             user_id_ = usermap[user_id]
 
             # Each user appears only once per split in the CSV; skip duplicates
@@ -428,15 +415,6 @@ def preprocess_raw_5core(
                         itemmap_final[it] = itemnum_final
                     itemid = itemmap_final[it]
 
-                    desc = meta_dict.get(id2asin[it], [None, None])[1]
-                    text_dict['description'][itemid] = (
-                        desc[0] if isinstance(desc, list) and len(desc) > 0 else
-                        desc if isinstance(desc, str) else 'Empty description'
-                    )
-                    title = meta_dict.get(id2asin[it], [None, None])[0]
-                    text_dict['title'][itemid] = title if title else 'Empty title'
-                    text_dict['time'][itemid][userid] = time_dict[it].get(user_id_)
-
                     f.write(f'{userid} {itemid}\n')
                     written += 1
             else:
@@ -457,25 +435,13 @@ def preprocess_raw_5core(
                         itemmap_final[it] = itemnum_final
                     itemid = itemmap_final[it]
 
-                    desc = meta_dict.get(id2asin[it], [None, None])[1]
-                    text_dict['description'][itemid] = (
-                        desc[0] if isinstance(desc, list) and len(desc) > 0 else
-                        desc if isinstance(desc, str) else 'Empty description'
-                    )
-                    title = meta_dict.get(id2asin[it], [None, None])[0]
-                    text_dict['title'][itemid] = title if title else 'Empty title'
-                    text_dict['time'][itemid][userid] = time_dict[it].get(user_id_)
-
                     f.write(f'{userid} {itemid}\n')
                     written += 1
 
         f.close()
         print(f"  -> {out_path}  ({written} lines)")
 
-    meta_out = os.path.join(data_dir, f'{fname}_text_name_dict.json.gz')
-    with open(meta_out, 'wb') as tf:
-        pickle.dump(text_dict, tf)
-    print(f"  -> {meta_out}")
+    _remove_text_metadata(fname, data_dir)
 
     print(f"\nDone. Final users: {usernum_final}, final items: {itemnum_final}")
 
